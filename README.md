@@ -1,6 +1,6 @@
 ViCTORIA MeerKAT Survey Pipeline.
 
-ViMS/
+ViMS/\\
 │── LOGS/                    # Directory for log files
 │── scripts/                  # Directory for pipeline scripts
 │   │── preprocessing.py
