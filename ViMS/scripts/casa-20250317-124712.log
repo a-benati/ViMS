@@ -1,0 +1,12 @@
+2025-03-17 12:47:12	INFO	::casa	
+2025-03-17 12:47:14	INFO	::casa	pull_data using version casarundata-2025.01.22-1.tar.gz, acquiring the lock ... 
+2025-03-17 12:47:21	INFO	::casa	downloading casarundata contents to /home/bbf4346/.casa/data ...
+2025-03-17 12:48:14	INFO	::casa	casarundata installed casarundata-2025.01.22-1.tar.gz at /home/bbf4346/.casa/data
+2025-03-17 12:48:14	SEVERE	::casa	
+2025-03-17 12:48:14	SEVERE	::casa	ERROR! Unexpected exception while doing auto updates or checking on the status of the data at measurespath
+2025-03-17 12:48:14	SEVERE	::casa	visit https://casadocs.readthedocs.io/en/stable/notebooks/external-data.html for more information
+2025-03-17 12:48:14	SEVERE	::casa	
+2025-03-17 12:48:14	INFO	::casa	
+2025-03-17 12:48:16	INFO	::casa	
+2025-03-17 12:48:16	INFO	::casa	
+2025-03-17 12:48:16	INFO	::casa	
