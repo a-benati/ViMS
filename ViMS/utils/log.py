@@ -28,3 +28,18 @@ def get_logger(name):
 def log_error(logger, message):
     separator = "#############################################################"
     logger.error(f"\n{separator}\n ERROR: {message} \n{separator}")
+
+# Function to redirect CASA logs to the same file
+def redirect_casa_logs(log_filename):
+    casa_logger = logging.getLogger('casatasks')  # CASA logger
+    casa_handler = logging.FileHandler(log_filename)  # Log to the same file
+    casa_handler.setLevel(logging.INFO)  # Set logging level
+    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+    casa_handler.setFormatter(formatter)
+    casa_logger.addHandler(casa_handler)  # Add handler to CASA logger
+
+# Function to set up logging for the pipeline and CASA
+def setup_logging():
+    log_filename = get_logger(__name__)
+    redirect_casa_logs(log_filename)  # Redirect CASA logs to the same file
+    return log_filename
