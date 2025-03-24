@@ -80,7 +80,7 @@ RUN cd /opt/wsclean && mkdir build && cd build     && cmake ..     && make -j `n
 #####################################################################
 RUN apt-get update && apt-get --fix-broken install -y
 RUN apt-get update && apt-get install -y libcanberra-gtk0 libgtk2.0-0 libcanberra-gtk-module \
-    libcanberra-gtk3-0 libgtk-3-0 libcanberra-gtk3-module
+    libcanberra-gtk3-0 libgtk-3-0 libcanberra-gtk3-module libgtkmm-3.0-dev
 RUN cd /opt && git clone https://gitlab.com/aroffringa/aoflagger.git     && cd /opt/aoflagger && git checkout tags/v3.4.0
 RUN cd /opt/aoflagger && mkdir build && cd build && mkdir install && cmake -DPORTABLE=True .. && make -j `nproc --all` && make install
 
@@ -102,7 +102,7 @@ RUN python3.10 -m pip install bdsf
 #####################################################################
 ## LSMtool (master fix_query_tempdir)
 #####################################################################
-RUN cd /opt && git clone https://git.astron.nl/RD/LSMTool.git     && cd /opt/LSMTool; git checkout fix_query_tempdir
+RUN cd /opt && git clone https://git.astron.nl/RD/LSMTool.git     && cd /opt/LSMTool; git checkout master
 RUN cd /opt/LSMTool && pip3 install . --upgrade
 
 ####################################################################
@@ -180,6 +180,14 @@ CMD ["/bin/bash"]
 # Activate the virtual environment
 CMD ["/bin/bash", "-c", "source /casa-venv/bin/activate && exec bash"]
 
+
+
+
+####################################################################
+## GUI INTERFACE
+####################################################################
+RUN apt-get update && apt-get install -y xorg
+
 #####################################################################
 
 RUN mkdir /usr/share/casacore/
@@ -193,3 +201,4 @@ ENV HDF5_USE_FILE_LOCKING FALSE
 ENV OMP_NUM_THREADS 1
 ENV OPENBLAS_NUM_THREADS 1
 RUN ulimit -n 4000
+ENV DISPLAY=localhost:12.0
