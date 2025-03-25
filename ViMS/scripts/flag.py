@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 
 import sys,os
-from utils.utils import run_command
-from utils.log import setup_logging
+from ViMS.utils.utils import run_command
+from ViMS.utils.log import setup_logging
 from casatasks import *
 
 # Set up the logging for this script and CASA
@@ -19,6 +19,11 @@ def run_flagging_task():
     try:
         # Example of running a CASA task
         listobs(vis=cal_ms, listfile='listobs.txt', overwrite=True)
+        # Log the step to Google Sheet
+        append_log_entry(sheet, "Listobs", "Success", "No warnings")
+        # If there is a plot generated
+        # plot_url = upload_plot_to_drive("path/to/plot.png")
+        # append_log_entry(sheet, "Flagging Calibrators", "Success", "No warnings", plot_url)
 
         # FLAGMANAGER FOR SAVING FLAGS
         flagmanager(vis=cal_ms,\
