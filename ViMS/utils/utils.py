@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 import subprocess
-from ViMS.utils.log import get_logger,log_error
+from ViMS.utils.log import get_logger#,log_error
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime

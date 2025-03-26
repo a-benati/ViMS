@@ -5,8 +5,7 @@ import os
 import glob
 import subprocess
 from datetime import datetime
-from googleapiclient.http import MediaFileUpload
-from googleapiclient.discovery import build
+from ViMS.utils.google_api_wrapper import upload_plot_to_drive, append_log_entry
 
 class Logger:
     """
