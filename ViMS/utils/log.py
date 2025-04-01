@@ -69,23 +69,6 @@ def handle_casa_log():
     redirect_casa_log()
     delete_casa_logs()
 
-# Function to initialize the Google Doc by calling google_api_wrapper.py
-# def initialize_google_doc():
-#     """
-#     Initializes the Google Doc by calling the google_api_wrapper.py
-#     """
-#     result = subprocess.run(
-#         ['/opt/py37_env/bin/python3.7', 'google_api_wrapper.py'], 
-#         capture_output=True, text=True
-#     )
-
-#     # Parse the result from google_api_wrapper.py (if it outputs the document ID)
-#     doc_id = result.stdout.strip()  # Assuming the ID is printed in the stdout
-#     doc_link = f"https://docs.google.com/document/d/{doc_id}/edit"
-    
-#     print(f"Google Doc link: {doc_link}")
-#     return doc_id
-
 # Function to append updates to the Google Doc
 def append_to_google_doc(step_name, status, warnings=None, plot_link=None):
     """
