@@ -5,7 +5,8 @@ import os
 import glob
 import subprocess
 from datetime import datetime
-from ViMS.utils.google_api_wrapper import upload_plot_to_drive, append_log_entry
+from ViMS.utils.paths import setup_output_dirs
+from ViMS.utils.google_api_wrapper import check_or_create_doc, append_log_entry
 
 class Logger:
     """
@@ -13,7 +14,6 @@ class Logger:
     """
     def __init__(self):
         # Set up logging directory
-        from ViMS.utils.utils import setup_output_dirs
         logs_dir = os.path.join(setup_output_dirs(), "LOGS")
         log_filename = f"log_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.log"
         log_filepath = os.path.join(logs_dir, log_filename)
@@ -69,116 +69,45 @@ def handle_casa_log():
     redirect_casa_log()
     delete_casa_logs()
 
-def append_log_entry(sheet, step_name, status, warnings=None, plot_link=None):
-    """
-    Append a log entry to the Google Sheet.
-    """
-    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    row = [timestamp, step_name, status, warnings if warnings else "", plot_link if plot_link else ""]
-    sheet.append_row(row)
+# Function to initialize the Google Doc by calling google_api_wrapper.py
+# def initialize_google_doc():
+#     """
+#     Initializes the Google Doc by calling the google_api_wrapper.py
+#     """
+#     result = subprocess.run(
+#         ['/opt/py37_env/bin/python3.7', 'google_api_wrapper.py'], 
+#         capture_output=True, text=True
+#     )
 
-# Example usage
-# append_log_entry(sheet, "Flagging Calibrators", "Success", "No warnings", "http://link_to_plot.png")
-
-def upload_plot_to_drive(credentials_file='credentials.json', plot_path='path/to/plot.png'):
-    """
-    Upload a plot to Google Drive and return the shareable link.
-    """
-    credentials = ServiceAccountCredentials.from_json_keyfile_name(credentials_file, SCOPE)
-    drive_service = build('drive', 'v3', credentials=credentials)
-
-    file_metadata = {'name': plot_path.split('/')[-1]}
-    media = MediaFileUpload(plot_path, mimetype='image/png')
+#     # Parse the result from google_api_wrapper.py (if it outputs the document ID)
+#     doc_id = result.stdout.strip()  # Assuming the ID is printed in the stdout
+#     doc_link = f"https://docs.google.com/document/d/{doc_id}/edit"
     
-    file = drive_service.files().create(body=file_metadata, media_body=media, fields='id').execute()
-    file_id = file.get('id')
+#     print(f"Google Doc link: {doc_link}")
+#     return doc_id
 
-    # Make file publicly accessible (or share it with specific email)
-    drive_service.permissions().create(
-        fileId=file_id,
-        body={'role': 'reader', 'type': 'anyone'},
-    ).execute()
+# Function to append updates to the Google Doc
+def append_to_google_doc(step_name, status, warnings=None, plot_link=None):
+    """
+    Appends an update to the Google Doc by calling the google_api_wrapper.py
+    """
+    # Replace None with an empty string for plot_link
+    if plot_link is None:
+        plot_link = ""
+    subprocess.run(
+        ['/opt/py37_env/bin/python3.7', 'google_api_wrapper.py', 'append_log', step_name, status, warnings or "", plot_link]
+    )
 
-    file_url = f"https://drive.google.com/file/d/{file_id}/view?usp=sharing"
-    return file_url
+def initialize_google_doc():
+    """
+    This function is called ONCE at the start of the pipeline to initialize the Google Doc.
+    """
+    subprocess.run(['/opt/py37_env/bin/python3.7', 'google_api_wrapper.py', 'init_doc'])
 
 if __name__ == "__main__":
     logger.info("Logging system initialized.")
-    delete_casa_logs()
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# import logging
-# import os
-# from datetime import datetime
-
-# # Define the logs directory
-# LOG_DIR = "../../LOGS"
-# os.makedirs(LOG_DIR, exist_ok=True)
-
-# # Generate log filename with timestamp
-# log_filename = os.path.join(LOG_DIR, f"log_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.log")
-
-# # Configure logging
-# logging.basicConfig(
-#     filename=log_filename,
-#     filemode="a",
-#     format="%(asctime)s - %(levelname)s - %(message)s",
-#     level=logging.INFO
-# )
-
-# # Function to get logger
-# def get_logger(name):
-#     logger = logging.getLogger(name)
-#     return logger
-
-# # Function to log errors with a clear separator
-# def log_error(logger, message):
-#     separator = "#############################################################"
-#     logger.error(f"\n{separator}\n ERROR: {message} \n{separator}")
-
-# # Function to redirect CASA logs to the same file
-# def redirect_casa_logs(log_filename):
-#     casa_logger = logging.getLogger('casatasks')  # CASA logger
-#     casa_handler = logging.FileHandler(log_filename)  # Log to the same file
-#     casa_handler.setLevel(logging.INFO)  # Set logging level
-#     formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-#     casa_handler.setFormatter(formatter)
-#     casa_logger.addHandler(casa_handler)  # Add handler to CASA logger
-
-# # Function to set up logging for the pipeline and CASA
-# def setup_logging():
-#     log_filename = get_logger(__name__)
-#     redirect_casa_logs(log_filename)  # Redirect CASA logs to the same file
-#     return log_filename
+    # Step 2: Call this function from different parts of the pipeline to append log updates
+    initialize_google_doc()
+    append_to_google_doc("Step 1: Data Loading", "Success", "No warnings", None)
+    append_to_google_doc("Step 2: Processing", "Success", "Minor warning: Skipped some files", "https://drive.google.com/file/d/12345/view")
