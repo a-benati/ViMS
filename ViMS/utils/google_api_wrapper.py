@@ -9,12 +9,7 @@ from googleapiclient.http import MediaFileUpload
 
 # Google API Scope
 SCOPE = ["https://www.googleapis.com/auth/drive", "https://www.googleapis.com/auth/documents"]
-credentials_file = 'vims-454810-b4d44dd0769a.json'
-
-# List of emails to share the document with
-SHARE_EMAILS = [
-    "alessandro.benati@inaf.it",
-]
+credentials_file = '/data/victoria/vims-454810-b4d44dd0769a.json'
 
 # Load credentials
 def get_credentials():
@@ -137,13 +132,6 @@ def setup_doc():
             ]
         }
     ).execute()
-
-    # Set permissions (share with emails)
-    for email in SHARE_EMAILS:
-        drive_service.permissions().create(
-            fileId=doc_id,
-            body={'role': 'writer', 'type': 'user', 'emailAddress': email},  # Share with emails as writers
-        ).execute()
 
     # Share with anyone with the link
     drive_service.permissions().create(
