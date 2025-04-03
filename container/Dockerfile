@@ -151,12 +151,14 @@ RUN apt-get update && apt-get install -y --allow-downgrades \
     libxau-dev libxdmcp-dev x11proto-dev xtrans-dev libxcb1-dev libx11-dev \
     libxt6=1:1.2.1-1 libsm-dev libxt-dev \
     hwloc-nox libslurm37 mpich \
-    xserver-common=2:21.1.4-2ubuntu1.7~22.04.13 libgl1 libunwind8 libxfont2 x11-xkb-utils libgl1-mesa-dri xvfb \
+    xserver-common libgl1 libunwind8 libxfont2 x11-xkb-utils libgl1-mesa-dri xvfb \
     libnsl-dev openmpi-bin libopenmpi-dev perl \
 && apt-get install -f -y \
 && apt-get --fix-broken install -y \
 && pip install --upgrade setuptools \
+&& pip install "protobuf<3.21" \
 && rm -rf /var/lib/apt/lists/*
+
 
 # Set up a Python virtual environment
 RUN python3.10 -m venv casa-venv && \
@@ -180,8 +182,14 @@ CMD ["/bin/bash"]
 # Activate the virtual environment
 CMD ["/bin/bash", "-c", "source /casa-venv/bin/activate && exec bash"]
 
+RUN pip3.10 install --force-reinstall --no-deps "protobuf<3.21"
 
+RUN rm -rf /tmp/* && rm -rf /var/tmp/*
 
+####################################################################
+## ShadeMS
+####################################################################
+RUN python3.10 -m pip install shadems
 
 ####################################################################
 ## GUI INTERFACE
@@ -189,9 +197,14 @@ CMD ["/bin/bash", "-c", "source /casa-venv/bin/activate && exec bash"]
 RUN apt-get update && apt-get install -y xorg
 
 ####################################################################
-## GOOGLE API
+## GOOGLE API IN PYTHON 3.7
 ####################################################################
-RUN pip3.10 install gspread oauth2client
+RUN apt install -y software-properties-common
+RUN add-apt-repository ppa:deadsnakes/ppa
+RUN apt update && apt install -y python3.7 python3.7-venv python3.7-distutils
+RUN python3.7 -m venv /opt/py37_env
+RUN /opt/py37_env/bin/pip install --upgrade gspread oauth2client google-api-python-client google-auth google-auth-httplib2 google-auth-oauthlib flask
+RUN /opt/py37_env/bin/pip install --force-reinstall --no-deps "protobuf<3.21"
 
 #####################################################################
 
