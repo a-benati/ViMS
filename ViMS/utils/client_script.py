@@ -45,10 +45,3 @@ def initialize_google_doc():
     url = "http://34.173.57.167:5000/initialize_google_doc"
     response = requests.post(url)
     return response.json()
-
-# Example usage
-# if __name__ == "__main__":
-    # initialize_google_doc()
-    # plot_link = upload_plot("/path/to/plot.png")
-    # log_response = append_log("Step 1", "Completed", "No issues", plot_link)
-    # print(log_response)
