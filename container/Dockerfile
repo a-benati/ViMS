@@ -159,14 +159,8 @@ RUN apt-get update && apt-get install -y --allow-downgrades \
 && pip install "protobuf<3.21" \
 && rm -rf /var/lib/apt/lists/*
 
-
-# Set up a Python virtual environment
-RUN python3.10 -m venv casa-venv && \
-    echo "source /home/casa-venv/bin/activate" >> ~/.bashrc
-
 # Activate the virtual environment and install CASA modules
-RUN /bin/bash -c "source casa-venv/bin/activate && \
-    pip3.10 install --upgrade pip wheel && \
+RUN /bin/bash -c "pip3.10 install --upgrade pip wheel && \
     pip3.10 install casaconfig==1.0.2 casatools==6.7.0.31 casatasks==6.7.0.31 \
     casaplotms==2.6.2 casaviewer==2.3.2 casashell==6.7.0.31 \
     casaplotserver==1.9.2 casatestutils==6.7.0.31 casatablebrowser==0.0.37 \
@@ -178,9 +172,6 @@ RUN echo "export PATH=/usr/lib/x86_64-linux-gnu/openmpi/bin:$PATH" >> ~/.bashrc 
 
 # Set the default shell
 CMD ["/bin/bash"]
-
-# Activate the virtual environment
-CMD ["/bin/bash", "-c", "source /casa-venv/bin/activate && exec bash"]
 
 RUN pip3.10 install --force-reinstall --no-deps "protobuf<3.21"
 
