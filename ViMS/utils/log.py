@@ -6,7 +6,7 @@ import glob
 import subprocess
 from datetime import datetime
 from ViMS.utils.paths import setup_output_dirs
-from ViMS.utils.google_api_wrapper import check_or_create_doc, append_log_entry
+from ViMS.utils.client_script import append_log, initialize_google_doc, upload_plot
 
 class Logger:
     """
@@ -72,25 +72,28 @@ def handle_casa_log():
 # Function to append updates to the Google Doc
 def append_to_google_doc(step_name, status, warnings=None, plot_link=None):
     """
-    Appends an update to the Google Doc by calling the google_api_wrapper.py
+    Appends an update to the Google Doc by calling the Flask backend.
     """
-    # Replace None with an empty string for plot_link
     if plot_link is None:
         plot_link = ""
-    subprocess.run(
-        ['/opt/py37_env/bin/python3.7', 'google_api_wrapper.py', 'append_log', step_name, status, warnings or "", plot_link]
-    )
+    if warnings is None:
+        warnings = ""
+    response = append_log(step_name, status, warnings, plot_link)
+    print(f"Appended log response: {response}")
 
-def initialize_google_doc():
+# Function to initialize the Google Doc (called once at pipeline start)
+def initialize_google_doc_once():
     """
-    This function is called ONCE at the start of the pipeline to initialize the Google Doc.
+    Initializes the Google Doc at the beginning of the pipeline.
     """
-    subprocess.run(['/opt/py37_env/bin/python3.7', 'google_api_wrapper.py', 'init_doc'])
+    response = initialize_google_doc()
+    print(f"Initialized doc response: {response}")
 
 if __name__ == "__main__":
     logger.info("Logging system initialized.")
 
     # Step 2: Call this function from different parts of the pipeline to append log updates
-    initialize_google_doc()
-    append_to_google_doc("Step 1: Data Loading", "Success", "No warnings", None)
-    append_to_google_doc("Step 2: Processing", "Success", "Minor warning: Skipped some files", "https://drive.google.com/file/d/12345/view")
+    initialize_google_doc_once()
+    append_to_google_doc("Initial Flagging", "Completed", warnings="", plot_link="")
+    #append_to_google_doc("Step 1: Data Loading", "Success", "No warnings", None)
+    #append_to_google_doc("Step 2: Processing", "Success", "Minor warning: Skipped some files", "https://drive.google.com/file/d/12345/view")
