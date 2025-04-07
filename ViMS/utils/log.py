@@ -5,16 +5,15 @@ import os
 import glob
 import subprocess
 from datetime import datetime
-from ViMS.utils.paths import setup_output_dirs
-from ViMS.utils.client_script import append_log, initialize_google_doc, upload_plot
+from utils.client_script import append_log, initialize_google_doc, upload_plot
 
 class Logger:
     """
     Handles uniform logging for the ViMS pipeline.
     """
-    def __init__(self):
+    def __init__(self, logs_dir):
         # Set up logging directory
-        logs_dir = os.path.join(setup_output_dirs(), "LOGS")
+        os.makedirs(logs_dir, exist_ok=True)
         log_filename = f"log_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.log"
         log_filepath = os.path.join(logs_dir, log_filename)
         
@@ -36,11 +35,6 @@ class Logger:
     
     def get_log_filepath(self):
         return self.log_filepath
-
-# Create a global logger instance
-logger_instance = Logger()
-logger = logger_instance.get_logger()
-log_filepath = logger_instance.get_log_filepath()
 
 def delete_casa_logs():
     """
@@ -89,11 +83,11 @@ def initialize_google_doc_once():
     response = initialize_google_doc()
     print(f"Initialized doc response: {response}")
 
-if __name__ == "__main__":
-    logger.info("Logging system initialized.")
+# if __name__ == "__main__":
+#     logger.info("Logging system initialized.")
 
     # Step 2: Call this function from different parts of the pipeline to append log updates
-    initialize_google_doc_once()
-    append_to_google_doc("Initial Flagging", "Completed", warnings="", plot_link="")
+    # initialize_google_doc_once()
+    # append_to_google_doc("Initial Flagging", "Completed", warnings="", plot_link="")
     #append_to_google_doc("Step 1: Data Loading", "Success", "No warnings", None)
     #append_to_google_doc("Step 2: Processing", "Success", "Minor warning: Skipped some files", "https://drive.google.com/file/d/12345/view")
