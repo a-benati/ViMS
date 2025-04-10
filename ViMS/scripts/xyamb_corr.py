@@ -58,9 +58,11 @@ def xyamb(xytab, qu, xyout=''):
                         flipped_channels += 1
                         c[0, ch, :] *= -1.0
                         st.putcol('CPARAM', c)
-            
+            avg_phase = np.angle(np.mean(c[0, :, :]), True)
+            print('Average phase = '+str(avg_phase))
             print('Flipped '+str(flipped_channels)+' channels in SPW '+str(spw))
-            
+
+
             st.close()
             time.sleep(1)
     
