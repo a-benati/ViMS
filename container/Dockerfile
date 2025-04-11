@@ -29,9 +29,13 @@ RUN python3.10 -m pip install --upgrade pip wheel
 
 RUN python3.10 -m pip install setuptools==59.5.0
 
+RUN apt-get update && apt-get install -y build-essential
+
 # Install Python packages
+RUN python3.10 -m pip install --upgrade pip
+RUN python3.10 -m pip install wheel setuptools
 RUN python3.10 -m pip install \
-    astropy pyregion regions h5py sshtunnel pymysql requests numexpr numpy astroquery aplpy cytoolz shapely tqdm
+    astropy pyregion regions h5py sshtunnel pymysql requests numexpr numpy astroquery cytoolz shapely tqdm matplotlib
 RUN curl -O http://launchpadlibrarian.net/646633572/libaio1_0.3.113-4_amd64.deb
 RUN dpkg -i libaio1_0.3.113-4_amd64.deb && rm libaio1_0.3.113-4_amd64.deb
 
@@ -109,6 +113,7 @@ RUN cd /opt/LSMTool && pip3 install . --upgrade
 ## LoSoTo (master 28/2/25)
 ###################################################################
 RUN cd /opt && git clone https://github.com/revoltek/losoto.git     && cd /opt/losoto && git checkout da8d88a3d42a72a0e91e6f36ced072c73a34e6ee
+RUN pip3 install wheel
 RUN cd /opt/losoto && pip3 install .
 
 ####################################################################
@@ -127,13 +132,15 @@ RUN cd /opt && mkdir -p msoverview/src && cd msoverview/src && wget https://git.
 # TRICOLOUR
 #####################################################################
 RUN python3.10 -m pip install donfig==0.7.0 && python3.10 -m pip install dask-ms --no-deps
+RUN pip3 install "numcodecs>=0.10.0"
 RUN python3.10 -m pip uninstall -y numpy && python3.10 -m pip install "numpy>=1.22.4,<1.29.0" && python3.10 -c "import numpy; print(numpy.__version__)" && sleep 15
+RUN python3.10 -m pip uninstall -y scipy && python3.10 -m pip install "scipy==1.8.0" && python3.10 -c "import scipy; print(scipy.__version__)" && sleep 15
 RUN cd /opt && git clone https://github.com/ratt-ru/tricolour --branch prepare-0.2.0 
 RUN cd /opt/tricolour && export PYTHONPATH=/opt/meersoft/lib/python3.10/site-packages/ 
 RUN sed -n '11,17p' /opt/tricolour/setup.py && sleep 15
 RUN sed -i "s/numpy >= 1.14.0, <= 1.22.0/numpy >= 1.22.4, <= 1.29.0/g" /opt/tricolour/setup.py && cat /opt/tricolour/setup.py | grep numpy && sleep 15
 RUN sed -n '11,17p' /opt/tricolour/setup.py && sleep 15
-RUN sed -i 's/scipy >= 1.2.0/scipy >= 1.5.0/g' /opt/tricolour/setup.py
+RUN sed -i 's/scipy >= 1.2.0/scipy >= 1.5.0, <= 1.8.0/g' /opt/tricolour/setup.py
 RUN cd /opt/tricolour && python3.10 setup.py install && cd ../ && rm -rf tricolour
 
 ####################################################################
@@ -183,9 +190,14 @@ RUN rm -rf /tmp/* && rm -rf /var/tmp/*
 RUN python3.10 -m pip install shadems
 
 ####################################################################
+## Ragavi
+####################################################################
+RUN python3.10 -m pip install ragavi
+
+####################################################################
 ## GUI INTERFACE
 ####################################################################
-RUN apt-get update && apt-get install -y xorg
+RUN apt-get update && apt-get install -y xorg dbus-x11
 
 ####################################################################
 ## GOOGLE API IN PYTHON 3.7

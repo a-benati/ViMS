@@ -2,6 +2,10 @@
 
 import os
 from utils import paths, log
+
+# Delete old CASA log files
+log.delete_old_casa_logs()
+
 from scripts import flag
 
 # Create the output directories
@@ -21,4 +25,4 @@ log.initialize_google_doc_once()
 ##########################################################
 ########################## FLAG ##########################
 ##########################################################
-flag.run(logger)
+flag.run(logger, log_path)

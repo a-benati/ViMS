@@ -1,5 +1,9 @@
 #!/bin/bash
 
+export PYTHONPATH=$PYTHONPATH:/ViMS
+export PYTHONPATH=/opt:${PYTHONPATH}
+export PYTHONPATH=/opt/aoflagger/build/python:$PYTHONPATH
+
 if [ $@ ]; then
 
     version=$1

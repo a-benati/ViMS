@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 
 import logging
-import os
-import glob
+import os, io, sys
+import glob, time
 import subprocess
+import tempfile
+import contextlib
 from datetime import datetime
 from utils.client_script import append_log, initialize_google_doc, upload_plot
 
@@ -35,33 +37,50 @@ class Logger:
     
     def get_log_filepath(self):
         return self.log_filepath
-
-def delete_casa_logs():
+    
+def delete_old_casa_logs():
     """
-    Find and delete CASA log files.
+    Find and delete old CASA log files.
     """
-    casa_logs = glob.glob("casa-*.log")
-    for log in casa_logs:
+    casa_log_pattern = os.getcwd() + "/casa*.log"
+    log_files = glob.glob(casa_log_pattern)
+    
+    for file in log_files:
         try:
-            os.remove(log)
-            logger.info(f"Deleted CASA log file: {log}")
+            os.remove(file)
         except Exception as e:
-            logger.error(f"Failed to delete CASA log file {log}: {e}")
+            print(f"Failed to delete CASA log file {file}: {e}")
 
-def redirect_casa_log():
+def redirect_casa_log(logger, delay=1.0):
     """
-    Run CASA and redirect its log output to the pipeline log file.
-    """
-    with open(log_filepath, "a") as log_file:
-        process = subprocess.Popen(["casa"], stdout=log_file, stderr=log_file)
-        process.wait()
+    Finds CASA log file, appends its content to the pipeline log via `logger`,
+    and then deletes it from the CASA log file, without deleting the file, so CASA keeps writing in it.
 
-def handle_casa_log():
+    Args:
+        logger: The logger instance of your pipeline.
+        delay: Seconds to wait before reading the file (in case CASA is still writing).
     """
-    Run CASA with logging redirection and clean up its log files.
-    """
-    redirect_casa_log()
-    delete_casa_logs()
+    casa_log = glob.glob("casa-*.log")[0]
+    if not casa_log:
+        logger.warning("No CASA log file found.")
+        return
+    
+    try:
+        time.sleep(delay)  # wait in case CASA is finishing writing
+        with open(casa_log, "r+", encoding="utf-8", errors="ignore") as f:
+            lines = f.readlines()
+            if not lines:
+                return
+            logger.info("\n\n\n\n\n")
+            logger.info("-------------------------------------------------------------------------------------")
+            for line in lines:
+                logger.info(line.strip())
+            logger.info("-------------------------------------------------------------------------------------\n\n\n\n\n")
+            # Return to the top and clear
+            f.seek(0)
+            f.truncate()
+    except Exception as e:
+        logger.error(f"Error reading CASA log file: {e}")
 
 # Function to append updates to the Google Doc
 def append_to_google_doc(step_name, status, warnings=None, plot_link=None):
@@ -82,12 +101,3 @@ def initialize_google_doc_once():
     """
     response = initialize_google_doc()
     print(f"Initialized doc response: {response}")
-
-# if __name__ == "__main__":
-#     logger.info("Logging system initialized.")
-
-    # Step 2: Call this function from different parts of the pipeline to append log updates
-    # initialize_google_doc_once()
-    # append_to_google_doc("Initial Flagging", "Completed", warnings="", plot_link="")
-    #append_to_google_doc("Step 1: Data Loading", "Success", "No warnings", None)
-    #append_to_google_doc("Step 2: Processing", "Success", "Minor warning: Skipped some files", "https://drive.google.com/file/d/12345/view")
