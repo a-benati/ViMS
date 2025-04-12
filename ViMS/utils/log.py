@@ -57,7 +57,7 @@ def redirect_casa_log(logger, delay=1.0):
     and then deletes it from the CASA log file, without deleting the file, so CASA keeps writing in it.
 
     Args:
-        logger: The logger instance of your pipeline.
+        logger: The logger instance of the pipeline.
         delay: Seconds to wait before reading the file (in case CASA is still writing).
     """
     casa_log = glob.glob("casa-*.log")[0]
@@ -71,11 +71,10 @@ def redirect_casa_log(logger, delay=1.0):
             lines = f.readlines()
             if not lines:
                 return
-            logger.info("\n\n\n\n\n")
             logger.info("-------------------------------------------------------------------------------------")
             for line in lines:
                 logger.info(line.strip())
-            logger.info("-------------------------------------------------------------------------------------\n\n\n\n\n")
+            logger.info("-------------------------------------------------------------------------------------")
             # Return to the top and clear
             f.seek(0)
             f.truncate()
