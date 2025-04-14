@@ -81,6 +81,56 @@ def redirect_casa_log(logger, delay=1.0):
     except Exception as e:
         logger.error(f"Error reading CASA log file: {e}")
 
+def log_obs_header(logger, obs_id):
+    """
+    Log a clear, formatted header indicating which observation is being processed.
+
+    Parameters:
+        logger: Logger instance to write the messages.
+        obs_id (str): Identifier for the observation (e.g., "obs01").
+    """
+    obs_str = f"########################## PROCESSING {obs_id.upper()} ##########################"
+    border = "#" * len(obs_str)
+
+    logger.info("")
+    logger.info("")
+    logger.info("")
+    logger.info("")
+    logger.info("")
+    logger.info(border)
+    logger.info(obs_str)
+    logger.info(border)
+    logger.info("")
+    logger.info("")
+    logger.info("")
+    logger.info("")
+    logger.info("")
+
+def log_obs_footer(logger, obs_id):
+    """
+    Log a clear, formatted footer indicating the observation has finished processing.
+
+    Parameters:
+        logger: Logger instance to write the messages.
+        obs_id (str): Identifier for the observation (e.g., "obs01").
+    """
+    obs_str = f"############### FINISHED PROCESSING {obs_id.upper()} ###############"
+    border = "#" * len(obs_str)
+
+    logger.info("")
+    logger.info("")
+    logger.info("")
+    logger.info("")
+    logger.info("")
+    logger.info(border)
+    logger.info(obs_str)
+    logger.info(border)
+    logger.info("")
+    logger.info("")
+    logger.info("")
+    logger.info("")
+    logger.info("")
+
 # Function to append updates to the Google Doc
 def append_to_google_doc(step_name, status, warnings=None, plot_link=None):
     """
@@ -100,3 +150,35 @@ def initialize_google_doc_once():
     """
     response = initialize_google_doc()
     print(f"Initialized doc response: {response}")
+
+def log_obs_header_google_doc(obs_id):
+    """
+    Log the start of an observation's processing in the Google Doc.
+
+    Parameters:
+        obs_id (str): Identifier for the observation (e.g., "obs01").
+    """
+    obs_str = f"############# PROCESSING {obs_id.upper()} #############"
+    border = "#" * len(obs_str)
+
+    append_to_google_doc("", "", warnings="", plot_link="")  # Empty line
+    append_to_google_doc(border, "", warnings="", plot_link="")
+    append_to_google_doc(obs_str, "", warnings="", plot_link="")
+    append_to_google_doc(border, "", warnings="", plot_link="")
+    append_to_google_doc("", "", warnings="", plot_link="")  # Empty line
+
+def log_obs_footer_google_doc(obs_id):
+    """
+    Log the end of an observation's processing in the Google Doc.
+
+    Parameters:
+        obs_id (str): Identifier for the observation (e.g., "obs01").
+    """
+    obs_str = f"######## FINISHED PROCESSING {obs_id.upper()} ########"
+    border = "#" * len(obs_str)
+
+    append_to_google_doc("", "", warnings="", plot_link="")  # Empty line
+    append_to_google_doc(border, "", warnings="", plot_link="")
+    append_to_google_doc(obs_str, "", warnings="", plot_link="")
+    append_to_google_doc(border, "", warnings="", plot_link="")
+    append_to_google_doc("", "", warnings="", plot_link="")  # Empty line

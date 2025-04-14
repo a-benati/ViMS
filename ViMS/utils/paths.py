@@ -8,11 +8,17 @@ def get_working_directory():
     """
     return os.getcwd()  # Assumes the script is run from the working directory
 
-def setup_output_dirs():
+def setup_output_dirs(obs_id):
     """
-    Ensure the OUTPUT directory and its subdirectories exist.
+    Set up the OUTPUT/<obs_id> directory and its subdirectories.
+    
+    Parameters:
+        obs_id (str): Identifier for the observation (e.g., "obs01").
+    
+    Returns:
+        str: Path to the base output directory for the given observation.
     """
-    base_output_dir = os.path.join(get_working_directory(), "OUTPUT")
+    base_output_dir = os.path.join(get_working_directory(), "OUTPUT", obs_id)
     subdirs = ["LOGS", "CAL_TABLES", "PLOTS"]
     
     for subdir in subdirs:

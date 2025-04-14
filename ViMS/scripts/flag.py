@@ -82,7 +82,7 @@ def append_flagsum_google_doc(summary):
                                  warnings="", plot_link="")
         log.append_to_google_doc("", "", warnings="", plot_link="")
 
-def run(logger):
+def run(logger, obs_id):
     logger.info("")
     logger.info("")
     logger.info("##########################################################")
@@ -111,6 +111,49 @@ def run(logger):
         logger.info("")
         logger.info("")
         log.append_to_google_doc("FLAG", "Saved flags", warnings="", plot_link="")
+
+        # RESTORE FLAGS
+        logger.info("\n\n\n\n\n")
+        logger.info("FLAG: Restoring flags...")
+        flagdata(vis=cal_ms,\
+                    mode="unflag",autocorr=True,inpfile="",reason="any",tbuff=0.0,\
+                    field="J1331+3030,J1939-6342,J1150-0023",antenna="",uvrange="",timerange="",\
+                    correlation="",scan="",intent="",array="",observation="",feed="",clipminmax=[],\
+                    datacolumn="DATA",clipoutside=True,channelavg=False,chanbin=1,timeavg=False,timebin="0s",\
+                    clipzeros=False,quackinterval=0.0,quackmode="beg",quackincrement=False,tolerance=0.0,\
+                    addantenna="",lowerlimit=0.0,upperlimit=90.0,ntime="scan",combinescans=False,timecutoff=4.0,\
+                    freqcutoff=3.0,timefit="line",freqfit="poly",maxnpieces=7,flagdimension="freqtime",\
+                    usewindowstats="none",halfwin=1,extendflags=True,winsize=3,timedev="",freqdev="",\
+                    timedevscale=5.0,freqdevscale=5.0,spectralmax=1000000.0,spectralmin=0.0,antint_ref_antenna="",\
+                    minchanfrac=0.6,verbose=False,extendpols=True,growtime=50.0,growfreq=50.0,growaround=False,\
+                    flagneartime=False,flagnearfreq=False,minrel=0.0,maxrel=1.0,minabs=0,maxabs=-1,spwchan=False,\
+                    spwcorr=False,basecnt=False,fieldcnt=False,name="Summary",action="apply",display="",\
+                    flagbackup=False,savepars=False,cmdreason="",outfile="",overwrite=True,writeflags=True)
+        log.redirect_casa_log(logger)
+        logger.info("FLAG: Restored flags\n\n\n\n\n")
+        logger.info("")
+        logger.info("")
+        logger.info("")
+        log.append_to_google_doc("FLAG", "Restored flags", warnings="", plot_link="")
+
+        # PLOT MS WITHOUT FLAGS
+        logger.info("\n\n\n\n\n")
+        logger.info("FLAG: Plotting MS file without flags...")
+        logger.info("-------------------------------------------------------------------------------------")
+        plot_path = f"./OUTPUT/{obs_id}/PLOTS/"
+        plot_name = f"{obs_id}{{_field}}_before_flags.png"
+        stdout, stderr = utils.run_command(f"shadems -x FREQ -y amp --iter-field --dir {plot_path} \
+                                           --png {plot_name} {cal_ms}")
+        logger.info(stdout)
+        if stderr:
+            logger.error(f"Error in ShadeMS: {stderr}")
+        logger.info("-------------------------------------------------------------------------------------")
+        logger.info("FLAG: Plotted MS file without flags\n\n\n\n\n")
+        logger.info("")
+        logger.info("")
+        logger.info("")
+        logger.info("\n\n\n\n\n")
+        log.append_to_google_doc("FLAG", "Plotted MS file without flags", warnings="", plot_link="")
 
         # FLAG AUTOCORRELATIONS
         logger.info("\n\n\n\n\n")
@@ -198,7 +241,7 @@ def run(logger):
                                         {cal_ms}")
         logger.info(stdout)
         if stderr:
-            log.error(f"Error in AOFlagger: {stderr}")
+            logger.error(f"Error in AOFlagger: {stderr}")
         logger.info("-------------------------------------------------------------------------------------")
         logger.info("FLAG: Flagged with AOFlagger (Annalisa's strategy) 1st time\n\n\n\n\n")
         logger.info("")
@@ -213,7 +256,7 @@ def run(logger):
                                         {cal_ms}")
         logger.info(stdout)
         if stderr:
-            log.error(f"Error in AOFlagger: {stderr}")
+            logger.error(f"Error in AOFlagger: {stderr}")
         logger.info("FLAG: Flagged with AOFlagger (Annalisa's strategy) 2nd time\n\n\n\n\n")
         logger.info("-------------------------------------------------------------------------------------")
         logger.info("")
@@ -231,6 +274,25 @@ def run(logger):
         logger.info("")
         logger.info("")
         logger.info("")
+
+        # PLOT MS WITH ALL THE FLAGS
+        logger.info("\n\n\n\n\n")
+        logger.info("FLAG: Plotting MS file with all the flags...")
+        logger.info("-------------------------------------------------------------------------------------")
+        plot_path = f"./OUTPUT/{obs_id}/PLOTS/"
+        plot_name = f"{obs_id}{{_field}}_after_flags.png"
+        stdout, stderr = utils.run_command(f"shadems -x FREQ -y amp --iter-field --dir {plot_path} \
+                                           --png {plot_name} {cal_ms}")
+        logger.info(stdout)
+        if stderr:
+            logger.error(f"Error in ShadeMS: {stderr}")
+        logger.info("-------------------------------------------------------------------------------------")
+        logger.info("FLAG: Plotted MS file with all the flags\n\n\n\n\n")
+        logger.info("")
+        logger.info("")
+        logger.info("")
+        logger.info("\n\n\n\n\n")
+        log.append_to_google_doc("FLAG", "Plotted MS file with all the flags", warnings="", plot_link="")
 
         logger.info("Flag step completed successfully!")
         logger.info("######################################################")
