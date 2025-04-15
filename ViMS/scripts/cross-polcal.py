@@ -116,7 +116,7 @@ tb.close()
 
 
 flag_versions = flagmanager(vis=calms, mode='list')
-'''inital_flag = any(entry['name'] == obs+'_initial_flag' for entry in flag_versions.values())
+inital_flag = any(entry['name'] == obs+'_initial_flag' for entry in flag_versions.values())
 
 
 if inital_flag:
@@ -126,7 +126,7 @@ if inital_flag:
 else:
     flagmanager(vis=calms, mode='save', versionname=obs+'_initial_flag', merge='replace')
     print("No 'initial_flag' found. Save current flagging state.")
-'''
+
 print()
 print('Clearing calibrations')
 clearcal(vis=calms)
@@ -197,7 +197,7 @@ gaincal(vis = calms, caltable = ktab, selectdata = True,\
 
 if args.do_plot ==True:
     #plotms(vis=ktab, xaxis='time', coloraxis='antenna1', plotfile=path+'/output/diagnostic_plots/crosscal/'+str(obs)+'_Kcal.png',showgui=False,overwrite=True)
-    os.system(f'ragavi-gains --table {ktab} --field 2 -g K --htlmname {path}/output/diagnostic_plots/crosscal/{obs}_Kcal --plotname {path}/output/diagnostic_plots/crosscal/{obs}_Kcal.png')
+    os.system(f'ragavi-gains --table {ktab} --field 2 --htmlname {path}/output/diagnostic_plots/crosscal/{obs}_Kcal --plotname {path}/output/diagnostic_plots/crosscal/{obs}_Kcal.png')
 
 
 # phase cal on bandpass calibrator
@@ -215,8 +215,8 @@ gaincal(vis = calms, caltable = gtab_a, selectdata = True,\
 if args.do_plot ==True:
     #plotms(vis=gtab_a, xaxis='time', yaxis='amplitude', coloraxis='antenna1', plotfile=path+'/output/diagnostic_plots/crosscal/'+str(obs)+'_Gcal_amp.png',showgui=False,overwrite=True)
     #plotms(vis=gtab_p, xaxis='time', yaxis='phase', coloraxis='antenna1', plotfile=path+'/output/diagnostic_plots/crosscal/'+str(obs)+'_Gcal_phase.png',showgui=False,overwrite=True)
-    os.system(f'ragavi-gains --table {gtab_a} --field 2 -g G -o {path}/output/diagnostic_plots/crosscal/{obs}_Gcal_amp -p {path}/output/diagnostic_plots/crosscal/{obs}_Gcal_amp.png')
-    os.system(f'ragavi-gains --table {gtab_p} --field 2 -g G -o {path}/output/diagnostic_plots/crosscal/{obs}_Gcal_phase -p {path}/output/diagnostic_plots/crosscal/{obs}_Gcal_phase.png')
+    os.system(f'ragavi-gains --table {gtab_a} --field 2 -o {path}/output/diagnostic_plots/crosscal/{obs}_Gcal_amp -p {path}/output/diagnostic_plots/crosscal/{obs}_Gcal_amp.png')
+    os.system(f'ragavi-gains --table {gtab_p} --field 2 -o {path}/output/diagnostic_plots/crosscal/{obs}_Gcal_phase -p {path}/output/diagnostic_plots/crosscal/{obs}_Gcal_phase.png')
 
 # bandpass cal on bandpass calibrator
 bandpass(vis = calms, caltable = btab, selectdata = True,\
@@ -228,7 +228,7 @@ bandpass(vis = calms, caltable = btab, selectdata = True,\
 if args.do_plot ==True:
     #plotms(vis=btab, xaxis='chan',yaxis='amp',coloraxis='antenna1', plotfile=path+'/output/diagnostic_plots/crosscal/'+str(obs)+'Bpcal_amp.png',showgui=False,overwrite=True)
     #plotms(vis=btab, xaxis='chan',yaxis='phase',coloraxis='antenna1', plotfile=path+'/output/diagnostic_plots/crosscal/'+str(obs)+'Bpcal_phase.png',showgui=False,overwrite=True)
-    os.system(f'ragavi-gains --table {btab} --field 2 -g B -o {path}/output/diagnostic_plots/crosscal/{obs}_Bpcal -p {path}/output/diagnostic_plots/crosscal/{obs}_Bpcal.png')
+    os.system(f'ragavi-gains --table {btab} --field 2 -o {path}/output/diagnostic_plots/crosscal/{obs}_Bpcal -p {path}/output/diagnostic_plots/crosscal/{obs}_Bpcal.png')
     #os.system(f'shadems {btab} -x FREQ -y phase -c ANTENNA1 --dir {path}/output/diagnostic_plots/crosscal --png {obs}Bpcal_phase.png')
 
 applycal(vis=calms, field=bpcal, gaintable=[ktab,gtab_p,gtab_a,btab], applymode='calflag', flagbackup=False)
@@ -243,7 +243,7 @@ if args.do_plot ==True:
 flagdata(vis=calms, mode="rflag", field=bpcal, datacolumn="corrected", quackinterval=0.0, timecutoff=4.0, freqcutoff=3.0, extendpols=False, flagbackup=False, outfile="",overwrite=True, extendflags=False)
 flagdata(vis=calms, mode='extend', field=bpcal, datacolumn='corrected', growtime=80, growfreq=80, flagbackup=False)
 
-if any(entry['name'] == obs+'_flag_crosscal' for entry in flag_versions.values()):
+if any(isinstance(entry, dict) and entry.get('name') == obs+'_flag_crosscal' for entry in flag_versions.values()):
     flagmanager(vis=calms, mode='delete', versionname=obs+'_flag_crosscal', merge='replace')
     print("Found 'flag_crosscal'. Deleting it.")    
 
@@ -261,7 +261,7 @@ gaincal(vis = calms, caltable = ktab2, selectdata = True,\
 
 if args.do_plot ==True:
     #plotms(vis=ktab2, xaxis='time', coloraxis='antenna1', plotfile=path+'/output/diagnostic_plots/crosscal/'+str(obs)+'_Kcal2.png',showgui=False,overwrite=True,)
-    os.system(f'ragavi-gains --table {ktab2} --field 2 -g K -o {path}/output/diagnostic_plots/crosscal/{obs}_Kcal2 -p {path}/output/diagnostic_plots/crosscal/{obs}_Kcal2.png')
+    os.system(f'ragavi-gains --table {ktab2} --field 2 -o {path}/output/diagnostic_plots/crosscal/{obs}_Kcal2 -p {path}/output/diagnostic_plots/crosscal/{obs}_Kcal2.png')
 
 # refined phase cal on bandpass calibrator
 gaincal(vis = calms, caltable = gtab_p2, selectdata = True,\
@@ -277,8 +277,8 @@ gaincal(vis = calms, caltable = gtab_a2, selectdata = True,\
 if args.do_plot ==True:
     #plotms(vis=gtab_a2, xaxis='time', yaxis='amplitude', coloraxis='antenna1', plotfile=path+'/output/diagnostic_plots/crosscal/'+str(obs)+'_Gcal_amp2.png',showgui=False,overwrite=True)
     #plotms(vis=gtab_p2, xaxis='time', yaxis='phase', coloraxis='antenna1', plotfile=path+'/output/diagnostic_plots/crosscal/'+str(obs)+'_Gcal_phase2.png',showgui=False,overwrite=True)
-    os.system(f'ragavi-gains --table {gtab_a2} --field 2 -g G -o {path}/output/diagnostic_plots/crosscal/{obs}_Gcal_amp2 -p {path}/output/diagnostic_plots/crosscal/{obs}_Gcal_amp2.png')
-    os.system(f'ragavi-gains --table {gtab_p2} --field 2 -g G -o {path}/output/diagnostic_plots/crosscal/{obs}_Gcal_phase2 -p {path}/output/diagnostic_plots/crosscal/{obs}_Gcal_phase2.png')
+    os.system(f'ragavi-gains --table {gtab_a2} --field 2 -o {path}/output/diagnostic_plots/crosscal/{obs}_Gcal_amp2 -p {path}/output/diagnostic_plots/crosscal/{obs}_Gcal_amp2.png')
+    os.system(f'ragavi-gains --table {gtab_p2} --field 2 -o {path}/output/diagnostic_plots/crosscal/{obs}_Gcal_phase2 -p {path}/output/diagnostic_plots/crosscal/{obs}_Gcal_phase2.png')
 
 # refined bandpass cal on bandpass calibrator
 bandpass(vis = calms, caltable = btab2, selectdata = True,\
@@ -290,7 +290,7 @@ bandpass(vis = calms, caltable = btab2, selectdata = True,\
 if args.do_plot ==True:
     #plotms(vis=btab2, xaxis='chan',yaxis='amp',coloraxis='antenna1', plotfile=path+'/output/diagnostic_plots/crosscal/'+str(obs)+'_Bpcal_amp2.png',showgui=False,overwrite=True, showlegend=True)
     #plotms(vis=btab2, xaxis='chan',yaxis='phase',coloraxis='antenna1', plotfile=path+'/output/diagnostic_plots/crosscal/'+str(obs)+'_Bpcal_phase2.png',showgui=False,overwrite=True, showlegend=True)
-    os.system(f'ragavi-gains --table {btab2} --field 2 -g B -o {path}/output/diagnostic_plots/crosscal/{obs}_Bpcal2 -p {path}/output/diagnostic_plots/crosscal/{obs}_Bpcal2.png')
+    os.system(f'ragavi-gains --table {btab2} --field 2 -o {path}/output/diagnostic_plots/crosscal/{obs}_Bpcal2 -p {path}/output/diagnostic_plots/crosscal/{obs}_Bpcal2.png')
     #os.system(f'shadems {btab2} -x FREQ -y phase -c ANTENNA1 --dir {path}/output/diagnostic_plots/crosscal --png {obs}_Bpcal_phase2.png')
 
 applycal(vis=calms, field=bpcal, gaintable=[ktab2,gtab_p2,gtab_a2,btab2], applymode='calflag', flagbackup=False)
@@ -308,7 +308,7 @@ if args.do_plot ==True:
 flagdata(vis=calms, mode="rflag", datacolumn="corrected", field=bpcal, quackinterval=0.0, timecutoff=4.0, freqcutoff=3.0, extendpols=False, flagbackup=False, outfile="",overwrite=True, extendflags=False, correlation='XY,YX')
 flagdata(vis=calms, mode='extend', datacolumn="corrected", field=bpcal, growtime=80, growfreq=80, flagbackup=False, growaround=True, flagnearfreq=True, correlation='XY,YX')
 
-if any(entry['name'] == obs+'_flag_before_df' for entry in flag_versions.values()):
+if any(isinstance(entry, dict) and entry.get('name') == obs+'_flag_before_df' for entry in flag_versions.values()):
     flagmanager(vis=calms, mode='delete', versionname=obs+'_flag_before_df', merge='replace')
     print("Found 'flag_before_df'. Deleting it.")
 flagmanager(vis=calms, mode='save', versionname=obs+'_flag_before_df', merge='replace')
@@ -325,7 +325,7 @@ polcal(vis = calms, caltable = ptab_df, selectdata = True,\
 # flag df solutions 
 flagdata(vis=ptab_df, mode='tfcrop',datacolumn="CPARAM", quackinterval=0.0,ntime="60s",combinescans=True,timecutoff=5.0, freqcutoff=3.0, usewindowstats="both", flagbackup=False)
 df_flagversions = flagmanager(vis=ptab_df, mode='list')
-if any(entry['name'] == obs+'_flag_df' for entry in df_flagversions.values()):
+if any(isinstance(entry, dict) and entry.get('name') == obs+'_flag_df' for entry in df_flagversions.values()):
     flagmanager(vis=ptab_df, mode='delete', versionname=obs+'_flag_df', merge='replace')
     print("Found 'flag_df'. Deleting it.")
 flagmanager(vis=ptab_df, mode='save', versionname=obs+'_flag_df', merge='replace')
@@ -333,7 +333,7 @@ flagmanager(vis=ptab_df, mode='save', versionname=obs+'_flag_df', merge='replace
 if args.do_plot ==True:
     #plotms(vis=ptab_df, xaxis='chan',yaxis='amplitude',coloraxis='antenna1', plotfile=path+'/output/diagnostic_plots/polcal/'+str(obs)+'_Dfcal_amp_flagged.png',showgui=False,overwrite=True)
     #plotms(vis=ptab_df, xaxis='chan',yaxis='phase',coloraxis='antenna1', plotfile=path+'/output/diagnostic_plots/polcal/'+str(obs)+'_Dfcal_phase_flagged.png',showgui=False,overwrite=True)
-    os.system(f'ragavi-gains --table {ptab_df} --field 2 -g D -o {path}/output/diagnostic_plots/polcal/{obs}_Dfcal_flagged -p {path}/output/diagnostic_plots/polcal/{obs}_Dfcal_flagged.png')
+    os.system(f'ragavi-gains --table {ptab_df} --field 2 -o {path}/output/diagnostic_plots/polcal/{obs}_Dfcal_flagged -p {path}/output/diagnostic_plots/polcal/{obs}_Dfcal_flagged.png')
     #os.system(f'shadems {ptab_df} -x FREQ -y phase -c ANTENNA1 --dir {path}/output/diagnostic_plots/polcal --png {obs}_Dfcal_phase_flagged.png')
 
 
@@ -344,7 +344,7 @@ applycal(vis=calms,field=fcal,gaintable=[ktab2,gtab_p2,gtab_a2,btab2,ptab_df],pa
 flagdata(vis=calms, mode="rflag", datacolumn="corrected", field=bpcal, quackinterval=0.0, timecutoff=4.0, freqcutoff=3.0, extendpols=False, flagbackup=False, outfile="",overwrite=True, extendflags=False, correlation='XY,YX')
 flagdata(vis=calms, mode='extend', datacolumn="corrected", field=bpcal, growtime=80, growfreq=80, flagbackup=False, growaround=True, flagnearfreq=True, correlation='XY,YX')
 
-if any(entry['name'] == obs+'_flag_df_sec_iter' for entry in flag_versions.values()):
+if any(isinstance(entry, dict) and entry.get('name') == obs+'_flag_df_sec_iter' for entry in flag_versions.values()):
     flagmanager(vis=calms, mode='delete', versionname=obs+'_flag_df_sec_iter', merge='replace')
     print("Found 'flag_df_sec_iter'. Deleting it.")
 flagmanager(vis=calms, mode='save', versionname=obs+'_flag_df_sec_iter', merge='replace')
@@ -361,12 +361,12 @@ polcal(vis = calms, caltable = ptab_df2, selectdata = True,\
 if args.do_plot ==True:
     #plotms(vis=ptab_df2, xaxis='chan',yaxis='amplitude',coloraxis='antenna1', plotfile=path+'/output/diagnostic_plots/polcal/'+str(obs)+'_Dfcal_amp_preflag2.png',showgui=False,overwrite=True)
     #plotms(vis=ptab_df2, xaxis='chan',yaxis='phase',coloraxis='antenna1', plotfile=path+'/output/diagnostic_plots/polcal/'+str(obs)+'_Dfcal_phase_preflag2.png',showgui=False,overwrite=True)
-    os.system(f'ragavi-gains --table {ptab_df2} --field 2 -g D -o {path}/output/diagnostic_plots/polcal/{obs}_Dfcal_preflag2 -p {path}/output/diagnostic_plots/polcal/{obs}_Dfcal_preflag2.png')
+    os.system(f'ragavi-gains --table {ptab_df2} --field 2 -o {path}/output/diagnostic_plots/polcal/{obs}_Dfcal_preflag2 -p {path}/output/diagnostic_plots/polcal/{obs}_Dfcal_preflag2.png')
     #os.system(f'shadems {ptab_df2} -x FREQ -y phase -c ANTENNA1 --dir {path}/output/diagnostic_plots/polcal --png {obs}_Dfcal_phase_preflag2.png')
 
 flagdata(vis=ptab_df2, mode='tfcrop',datacolumn="CPARAM", quackinterval=0.0,ntime="60s",combinescans=True,timecutoff=5.0, freqcutoff=3.0, usewindowstats="both", flagbackup=False)
 df_flagversions2 = flagmanager(vis=ptab_df2, mode='list')
-if any(entry['name'] == obs+'_flag_df2' for entry in df_flagversions2.values()):
+if any(isinstance(entry, dict) and entry.get('name') == obs+'_flag_df2' for entry in df_flagversions2.values()):
     flagmanager(vis=ptab_df2, mode='delete', versionname=obs+'_flag_df2', merge='replace')
     print("Found 'flag_df2'. Deleting it.")
 flagmanager(vis=ptab_df2, mode='save', versionname=obs+'_flag_df2', merge='replace')
@@ -374,7 +374,7 @@ flagmanager(vis=ptab_df2, mode='save', versionname=obs+'_flag_df2', merge='repla
 if args.do_plot ==True:
     #plotms(vis=ptab_df2, xaxis='chan',yaxis='amplitude',coloraxis='antenna1', plotfile=path+'/output/diagnostic_plots/polcal/'+str(obs)+'_Dfcal_amp_flagged2.png',showgui=False,overwrite=True)
     #plotms(vis=ptab_df2, xaxis='chan',yaxis='phase',coloraxis='antenna1', plotfile=path+'/output/diagnostic_plots/polcal/'+str(obs)+'_Dfcal_phase_flagged2.png',showgui=False,overwrite=True)
-    os.system(f'ragavi-gains --table {ptab_df2} --field 2 -g D -o {path}/output/diagnostic_plots/polcal/{obs}_Dfcal_flagged2 -p {path}/output/diagnostic_plots/polcal/{obs}_Dfcal_flagged2.png')
+    os.system(f'ragavi-gains --table {ptab_df2} --field 2 -o {path}/output/diagnostic_plots/polcal/{obs}_Dfcal_flagged2 -p {path}/output/diagnostic_plots/polcal/{obs}_Dfcal_flagged2.png')
     #os.system(f'shadems {ptab_df2} -x FREQ -y phase -c ANTENNA1 --dir {path}/output/diagnostic_plots/polcal --png {obs}_Dfcal_phase_flagged2.png')
 
 applycal(vis=calms,field=gcal,gaintable=[ktab2,gtab_p2,gtab_a2,btab2,ptab_df2],parang=False, flagbackup=False)
@@ -382,7 +382,7 @@ applycal(vis=calms,field=gcal,gaintable=[ktab2,gtab_p2,gtab_a2,btab2,ptab_df2],p
 flagdata(vis=calms, mode="rflag", field=gcal, datacolumn="corrected", quackinterval=0.0, timecutoff=4.0, freqcutoff=3.0, extendpols=False, flagbackup=False, outfile="",overwrite=True, extendflags=False)
 flagdata(vis=calms, mode='extend', field=gcal, datacolumn='corrected', growtime=80, growfreq=80, flagbackup=False, growaround=True, flagnearfreq=True)
 
-if any(entry['name'] == obs+'_flag_after_df' for entry in flag_versions.values()):
+if any(isinstance(entry, dict) and entry.get('name') == obs+'_flag_after_df' for entry in flag_versions.values()):
     flagmanager(vis=calms, mode='delete', versionname=obs+'_flag_after_df', merge='replace')
     print("Found 'flag_after_df'. Deleting it.")
 flagmanager(vis=calms, mode='save', versionname=obs+'_flag_after_df', merge='replace')
@@ -438,8 +438,8 @@ if args.do_plot ==True:
 applycal(vis=calms,field=xcal,gaintable=[ktab,gtab_p2,gtab_a2,btab2,ptab_df2],parang=False, flagbackup=False)
 
 flagdata(vis=calms, mode="rflag", field=xcal, datacolumn="corrected", quackinterval=0.0, timecutoff=4.0, freqcutoff=3.0, extendpols=False, flagbackup=False, outfile="",overwrite=True, extendflags=False)
-flagdata(vis=calms, mode='extend', field=xcal, datacolumn='corrected', growtime=50, growfreq=50, flagbackup=False, growaround=True, flagnearfreq=True)
-if any(entry['name'] == obs+'_flag_before_xf' for entry in flag_versions.values()):
+flagdata(vis=calms, mode='extend', field=xcal, datacolumn='corrected', growtime=80, growfreq=80, flagbackup=False, growaround=True, flagnearfreq=True)
+if any(isinstance(entry, dict) and entry.get('name') == obs+'_flag_before_xf' for entry in flag_versions.values()):
     flagmanager(vis=calms, mode='delete', versionname=obs+'_flag_before_xf', merge='replace')
     print("Found 'flag_before_xf'. Deleting it.")
 flagmanager(vis=calms, mode='save', versionname=obs+'_flag_before_xf', merge='replace')
@@ -469,7 +469,7 @@ gaincal(vis = calms, caltable = gtab_pol_p, selectdata = True,\
 
 #selfcal on polarisation calibrator
 if args.self_xcal==True:
-    tclean(vis=calms,field=xcal,cell='0.5arcsec',imsize=512,niter=1000,imagename=xcal+'-selfcal',weighting='briggs',robust=-0.2,datacolumn= 'corrected',deconvolver= 'mtmfs',\
+    tclean(vis=calms,field=xcal,cell='0.5arcsec',imsize=512,niter=1000,imagename=path+'/output/pol_selfcal/'+obs+'_'+xcal+'-selfcal',weighting='briggs',robust=-0.2,datacolumn= 'corrected',deconvolver= 'mtmfs',\
        nterms=2,specmode='mfs',interactive=False)
     gaincal(vis=calms,field=xcal, calmode='p', solint='30s',caltable=gtab_pol_p+'-selfcal',refantmode='strict',\
         refant=ref_ant,gaintype='G',gaintable = [ktab_pol, gtab_a2,btab2,ptab_df2], parang = False)
