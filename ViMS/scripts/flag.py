@@ -102,9 +102,9 @@ def run(logger, obs_id):
         # FLAGMANAGER FOR SAVING FLAGS
         logger.info("\n\n\n\n\n")
         logger.info("FLAG: Saving flags...")
-        flagmanager(vis=cal_ms,\
-                            mode="save",versionname="obs01_flag_before",oldname="",comment="",\
-                            merge="replace")
+        # flagmanager(vis=cal_ms,\
+        #                     mode="save",versionname="obs01_flag_before",oldname="",comment="",\
+        #                     merge="replace")
         log.redirect_casa_log(logger)
         logger.info("FLAG: Saved flags\n\n\n\n\n")
         logger.info("")
@@ -115,20 +115,20 @@ def run(logger, obs_id):
         # RESTORE FLAGS
         logger.info("\n\n\n\n\n")
         logger.info("FLAG: Restoring flags...")
-        flagdata(vis=cal_ms,\
-                    mode="unflag",autocorr=True,inpfile="",reason="any",tbuff=0.0,\
-                    field="J1331+3030,J1939-6342,J1150-0023",antenna="",uvrange="",timerange="",\
-                    correlation="",scan="",intent="",array="",observation="",feed="",clipminmax=[],\
-                    datacolumn="DATA",clipoutside=True,channelavg=False,chanbin=1,timeavg=False,timebin="0s",\
-                    clipzeros=False,quackinterval=0.0,quackmode="beg",quackincrement=False,tolerance=0.0,\
-                    addantenna="",lowerlimit=0.0,upperlimit=90.0,ntime="scan",combinescans=False,timecutoff=4.0,\
-                    freqcutoff=3.0,timefit="line",freqfit="poly",maxnpieces=7,flagdimension="freqtime",\
-                    usewindowstats="none",halfwin=1,extendflags=True,winsize=3,timedev="",freqdev="",\
-                    timedevscale=5.0,freqdevscale=5.0,spectralmax=1000000.0,spectralmin=0.0,antint_ref_antenna="",\
-                    minchanfrac=0.6,verbose=False,extendpols=True,growtime=50.0,growfreq=50.0,growaround=False,\
-                    flagneartime=False,flagnearfreq=False,minrel=0.0,maxrel=1.0,minabs=0,maxabs=-1,spwchan=False,\
-                    spwcorr=False,basecnt=False,fieldcnt=False,name="Summary",action="apply",display="",\
-                    flagbackup=False,savepars=False,cmdreason="",outfile="",overwrite=True,writeflags=True)
+        # flagdata(vis=cal_ms,\
+        #             mode="unflag",autocorr=True,inpfile="",reason="any",tbuff=0.0,\
+        #             field="J1331+3030,J1939-6342,J1150-0023",antenna="",uvrange="",timerange="",\
+        #             correlation="",scan="",intent="",array="",observation="",feed="",clipminmax=[],\
+        #             datacolumn="DATA",clipoutside=True,channelavg=False,chanbin=1,timeavg=False,timebin="0s",\
+        #             clipzeros=False,quackinterval=0.0,quackmode="beg",quackincrement=False,tolerance=0.0,\
+        #             addantenna="",lowerlimit=0.0,upperlimit=90.0,ntime="scan",combinescans=False,timecutoff=4.0,\
+        #             freqcutoff=3.0,timefit="line",freqfit="poly",maxnpieces=7,flagdimension="freqtime",\
+        #             usewindowstats="none",halfwin=1,extendflags=True,winsize=3,timedev="",freqdev="",\
+        #             timedevscale=5.0,freqdevscale=5.0,spectralmax=1000000.0,spectralmin=0.0,antint_ref_antenna="",\
+        #             minchanfrac=0.6,verbose=False,extendpols=True,growtime=50.0,growfreq=50.0,growaround=False,\
+        #             flagneartime=False,flagnearfreq=False,minrel=0.0,maxrel=1.0,minabs=0,maxabs=-1,spwchan=False,\
+        #             spwcorr=False,basecnt=False,fieldcnt=False,name="Summary",action="apply",display="",\
+        #             flagbackup=False,savepars=False,cmdreason="",outfile="",overwrite=True,writeflags=True)
         log.redirect_casa_log(logger)
         logger.info("FLAG: Restored flags\n\n\n\n\n")
         logger.info("")
@@ -144,6 +144,7 @@ def run(logger, obs_id):
         plot_name = f"{obs_id}{{_field}}_before_flags.png"
         stdout, stderr = utils.run_command(f"shadems -x FREQ -y amp --iter-field --dir {plot_path} \
                                            --png {plot_name} {cal_ms}")
+        plot_link = log.upload_plot_to_drive(plot_path, plot_name)
         logger.info(stdout)
         if stderr:
             logger.error(f"Error in ShadeMS: {stderr}")
@@ -153,7 +154,7 @@ def run(logger, obs_id):
         logger.info("")
         logger.info("")
         logger.info("\n\n\n\n\n")
-        log.append_to_google_doc("FLAG", "Plotted MS file without flags", warnings="", plot_link="")
+        log.append_to_google_doc("FLAG", "Plotted MS file without flags", warnings="", plot_link=plot_link)
 
         # FLAG AUTOCORRELATIONS
         logger.info("\n\n\n\n\n")

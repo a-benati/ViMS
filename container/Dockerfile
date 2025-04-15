@@ -84,8 +84,8 @@ RUN cd /opt/wsclean && mkdir build && cd build     && cmake ..     && make -j `n
 #####################################################################
 RUN apt-get update && apt-get --fix-broken install -y
 RUN apt-get update && apt-get install -y libcanberra-gtk0 libgtk2.0-0 libcanberra-gtk-module \
-    libcanberra-gtk3-0 libgtk-3-0 libcanberra-gtk3-module libgtkmm-3.0-dev
-RUN cd /opt && git clone https://gitlab.com/aroffringa/aoflagger.git     && cd /opt/aoflagger && git checkout tags/v3.4.0
+    libcanberra-gtk3-0 libgtk-3-0 libcanberra-gtk3-module libgtkmm-3.0-dev libgtkmm-3.0-1v5
+RUN cd /opt && git clone https://gitlab.com/aroffringa/aoflagger.git     && cd /opt/aoflagger && git checkout tags/v3.2.0
 RUN cd /opt/aoflagger && mkdir build && cd build && mkdir install && cmake -DPORTABLE=True .. && make -j `nproc --all` && make install
 
 #####################################################################
@@ -185,13 +185,9 @@ RUN pip3.10 install --force-reinstall --no-deps "protobuf<3.21"
 RUN rm -rf /tmp/* && rm -rf /var/tmp/*
 
 ####################################################################
-## ShadeMS
-####################################################################
-RUN python3.10 -m pip install shadems
-
-####################################################################
 ## Ragavi
 ####################################################################
+RUN python3.10 -m pip install "setuptools<69.0.0"
 RUN python3.10 -m pip install ragavi
 
 ####################################################################
@@ -209,8 +205,48 @@ RUN python3.7 -m venv /opt/py37_env
 RUN /opt/py37_env/bin/pip install --upgrade gspread oauth2client google-api-python-client google-auth google-auth-httplib2 google-auth-oauthlib flask
 RUN /opt/py37_env/bin/pip install --force-reinstall --no-deps "protobuf<3.21"
 
+####################################################################
+## Script for convolving to a common beam
+####################################################################
+RUN curl -o /opt/beam.py https://raw.githubusercontent.com/radio-astro-tools/radio-beam/master/radio_beam/beam.py
+
+####################################################################
+## rmsynth3d
+####################################################################
+RUN cd /opt && git clone https://github.com/candersoncsiro/rmsynth3d.git
+
+####################################################################
+## RM-Tools
+####################################################################
+RUN python3.10 -m pip install RM-Tools
+
+####################################################################
+## pyrmsynth (my forked version wrapped for python3 and with updated setup.py)
+####################################################################
+RUN cd /opt && git clone https://github.com/a-benati/pyrmsynth.git
+RUN cd /opt/pyrmsynth/lib_rm_tools && python3.10 -m pip install .
+
+####################################################################
+## Francesco's scripts
+####################################################################
+RUN cd /opt && git clone https://github.com/revoltek/scripts.git
+
+####################################################################
+## RMExtract
+####################################################################
+RUN python3 -m pip install RMExtract
+
+####################################################################
+## ShadeMS
+####################################################################
+RUN python3.10 -m pip install dask_expr==1.1.16
+RUN python3.10 -m pip install dask==2023.12.1
+RUN python3.10 -m pip install shadems
+
 #####################################################################
 
+ENV PATH=$PATH:/opt
+ENV PYTHONPATH=$PYTHONPATH:/opt
 RUN mkdir /usr/share/casacore/
 RUN ln -s /usr/share/casacore/data/ /opt/casacore/data
 
