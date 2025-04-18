@@ -21,6 +21,10 @@ for obs_id in obs_ids:
     logs_dir = os.path.join(output_dir, "LOGS")
     cal_tables_dir = os.path.join(output_dir, "CAL_TABLES")
     plots_dir = os.path.join(output_dir, "PLOTS")
+    images_dir = os.path.join(output_dir, "CAL_IMAGES")
+    ms_dir = os.path.join(output_dir, "MS_FILES")
+    cubes_dir = os.path.join(output_dir, "STOKES_CUBES")
+    ionex_dir = os.path.join(output_dir, "IONEX_DATA")
     
     # Create a logger instance for this obs
     logger_instance = log.Logger(logs_dir)

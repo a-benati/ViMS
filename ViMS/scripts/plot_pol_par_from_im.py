@@ -13,7 +13,7 @@ import argparse
 
 
 parser = argparse.ArgumentParser(description='Plot polarisation properties from Q and U images')
-parser.add_argument('--basename_pol ', type=str, help='Basename of the polarisation images e.g obs02_3c286_mask-final')
+parser.add_argument('--basename_pol', type=str, help='Basename of the polarisation images e.g obs02_3c286_mask-final')
 parser.add_argument('--basename', type=str, help='Base name of the images')
 parser.add_argument('--path', type=str, help='Path to the folder')
 parser.add_argument('--region', type=str, help='Name of the region file')

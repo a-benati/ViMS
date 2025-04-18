@@ -25,7 +25,7 @@ args = parser.parse_args()
 
 #names of input images
 name_tot = args.path + '/STOKES_CUBES/' + args.basename +'_tot_dirty.fits'
-name_q = args.path + '/STOKES_CUBES/' + args.basename *'_real_dirty.fits'
+name_q = args.path + '/STOKES_CUBES/' + args.basename +'_real_dirty.fits'
 name_u = args.path + '/STOKES_CUBES/' + args.basename +'_im_dirty.fits'
 name_i = args.path + '/STOKES_CUBES/' + args.name_i
 
