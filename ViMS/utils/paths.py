@@ -19,7 +19,7 @@ def setup_output_dirs(obs_id):
         str: Path to the base output directory for the given observation.
     """
     base_output_dir = os.path.join(get_working_directory(), "OUTPUT", obs_id)
-    subdirs = ["LOGS", "CAL_TABLES", "PLOTS"]
+    subdirs = ["LOGS", "CAL_TABLES", "PLOTS", "CAL_IMAGES", "STOKES_CUBES", "IONEX_DATA"]
     
     for subdir in subdirs:
         os.makedirs(os.path.join(base_output_dir, subdir), exist_ok=True)

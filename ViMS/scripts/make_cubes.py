@@ -60,8 +60,8 @@ crpix2=head['CRPIX1']
 
 
 
-if not os.path.exists(path+'STOKES_CUBES'):
-   os.system('mkdir '+path+'STOKES_CUBES')
+if not os.path.exists(path+'/STOKES_CUBES'):
+   os.system('mkdir '+path+'/STOKES_CUBES')
 
 rms_q=[]
 rms_u=[]

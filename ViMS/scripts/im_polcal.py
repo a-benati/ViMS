@@ -31,7 +31,7 @@ def make_cubes(logger, obs_id):
     im_name = f'OUTPUT/{obs_id}/CAL_IMAGES/{obs_id}_cal_3c286-'
     MFS_I = im_name + 'MFS-I-image.fits'
     cube_name = f'OUTPUT/{obs_id}/STOKES_CUBES/{obs_id}_3c286_'
-    output_cube = cube_name + 'IQUV-Cubes'
+    output_cube = cube_name + 'IQUV-'
     hdu_im = fits.open(MFS_I)[0]
     head = fits.open(MFS_I)[0].header
 
@@ -102,15 +102,15 @@ def make_cubes(logger, obs_id):
     fits.writeto(output_cube+'U_cube.fits', array_u, header=head, overwrite=True)
     fits.writeto(output_cube+'I_cube.fits', array_i, header=head, overwrite=True)
 
-    f_rms = open(output_cube+'-rms.txt', 'w')
+    f_rms = open(output_cube+'rms.txt', 'w')
     np.savetxt(f_rms, rms_p)
     f_rms.close()
-    logger.info(' make_cube: Wriritng ',output_cube+'-rms.txt')
+    logger.info(' make_cube: Wriritng ',output_cube+'rms.txt')
 
-    f_freq= open(output_cube+'-freq.txt', 'w')
+    f_freq= open(output_cube+'freq.txt', 'w')
     np.savetxt(f_freq, array_freq)
     f_freq.close()
-    logger.info('make_cube: writing ',output_cube+'-freq.txt')
+    logger.info('make_cube: writing ',output_cube+'freq.txt')
 
 #-------------------------------------------------------------------
 
@@ -121,7 +121,7 @@ def stokesI_model(obs_id):
     create a background subtracted stokes I image to use for the RM synthesis
     """
     output_cube = f'OUTPUT/{obs_id}/STOKES_CUBES/{obs_id}_3c286_'
-    hdul = fits.open(output_cube +'IQUV-CubesI_cube.fits')
+    hdul = fits.open(output_cube +'IQUV-I_cube.fits')
     data = hdul[0].data
     masked_data = np.empty_like(data)
 
@@ -136,7 +136,7 @@ def stokesI_model(obs_id):
         masked_data[i, :, :] = np.where(slice_2d >= thresh, slice_2d, np.nan)
     
     hdul[0].data = masked_data
-    hdul.writeto(output_cube+'IQUV-CubesI_masked.fits', overwrite=True)
+    hdul.writeto(output_cube+'IQUV-I_masked.fits', overwrite=True)
 
 #-------------------------------------------------------------------
 
@@ -148,8 +148,8 @@ def rm_synth_param(obs_id):
     return values needed for rmsynth3d and final_rm_synth
     """
     output_cube = f'OUTPUT/{obs_id}/STOKES_CUBES/{obs_id}_3c286_'
-    freq_list = np.loadtxt(output_cube + 'IQUV-Cubes-freq.txt')
-    rms_list = np.loadtxt(output_cube + 'IQUV-Cubes-rms.txt')
+    freq_list = np.loadtxt(output_cube + 'IQUV-freq.txt')
+    rms_list = np.loadtxt(output_cube + 'IQUV-rms.txt')
 
     #convert frequencies to lambda squared
     lambda2_list = (scipy.constants.c / freq_list) ** 2
@@ -219,7 +219,7 @@ def final_rm_synth(obs_id, sigma_p, d_phi, logger):
     name_tot = f'OUTPUT/{obs_id}/STOKES_CUBES/{obs_id}_3c286-FDF_tot_dirty.fits'
     name_q = f'OUTPUT/{obs_id}/STOKES_CUBES/{obs_id}_3c286-FDF_real_dirty.fits'
     name_u = f'OUTPUT/{obs_id}/STOKES_CUBES/{obs_id}_3c286-FDF_im_dirty.fits'
-    name_i = f'OUTPUT/{obs_id}/STOKES_CUBES/{obs_id}_3c286_IQUV-CubesI_cube.fits'
+    name_i = f'OUTPUT/{obs_id}/STOKES_CUBES/{obs_id}_3c286_IQUV-I_cube.fits'
 
     #open input images
 
@@ -441,7 +441,7 @@ def plot_results(obs_id, logger, cal_ms):
     mean_freq = 1.14e9 #mean frequency in Hz
     cutout_size = (100, 100)
 
-    freq_list = np.loadtxt(f'OUTPUT/{obs_id}/STOKES_CUBES/{obs_id}_3c286-IQUV-Cubes-freq.txt')
+    freq_list = np.loadtxt(f'OUTPUT/{obs_id}/STOKES_CUBES/{obs_id}_3c286-IQUV-freq.txt')
     hdu_I = fits.open(name_stokesI)
     header_i = hdu_I[0].header
     wcs_all = WCS(header_i)
@@ -601,12 +601,12 @@ def plot_results_from_im(obs_id, logger):
     stokesU = AllImages(stokesU_files)
 
     #get freq and rms data
-    freq_list = np.loadtxt(f'OUTPUT/{obs_id}/STOKES_CUBES/{obs_id}_3c286-IQUV-Cubes-freq.txt')
+    freq_list = np.loadtxt(f'OUTPUT/{obs_id}/STOKES_CUBES/{obs_id}_3c286-IQUV-freq.txt')
     freq_Ghz = np.array(freq_list)*1e-9 #convert to GHz
     c = 2.99792458e8
     wavelength_m = c/(freq_Ghz*1e9)
 
-    rms_list = np.loadtxt(f'OUTPUT/{obs_id}/STOKES_CUBES/{obs_id}_3c286-IQUV-Cubes-rms.txt')
+    rms_list = np.loadtxt(f'OUTPUT/{obs_id}/STOKES_CUBES/{obs_id}_3c286-IQUV-rms.txt')
     rms_arr = np.array(rms_list)
 
     #get flux from all images
@@ -723,7 +723,7 @@ def run(logger, obs_id):
                 -field 1 -pol iquv -weight briggs -0.5 -j 32 -abs-mem 100.0 -channels-out 15 -join-channels -gridder wgridder -no-update-model-required \
                 -squared-channel-joining -join-polarizations -fit-spectral-pol 4 -multiscale  -multiscale-scales 0,2,3,6 -multiscale-scale-bias 0.75 \
                 -parallel-deconvolution 1000 -parallel-gridding 1 -channel-range 0 2296 -nwlayers-factor 3 -minuvw-m 40 -no-mf-weighting -weighting-rank-filter 3 \
-                -data-column CORRECTED_DATA OUTPUT/{obs_id}/MS_FILES/{cal_ms}")
+                -data-column CORRECTED_DATA {cal_ms}")
         
         logger.info('IMAGE POLCAL: finished WSClean')
         logger.info("")
@@ -774,9 +774,9 @@ def run(logger, obs_id):
         #run rmsynth3d
         logger.info("\n\n\n\n\n")
         logger.info("IMAGE POLCAL: running rmsynth3d...")
-        cube_name = f'OUTPUT/{obs_id}/STOKES_CUBES/{obs_id}_3c286_IQUV-Cubes'
+        cube_name = f'OUTPUT/{obs_id}/STOKES_CUBES/{obs_id}_3c286_IQUV-'
         rm_name = f'OUTPUT/{obs_id}/STOKES_CUBES/{obs_id}_3c286-'
-        os.sys(f'rmsynth3d {cube_name}Q_cube.fits {cube_name}U_cube.fits {cube_name}-freq.txt -i {cube_name}I_masked.fits -v -l {phi_max} -s 30 -w "variance" -o {rm_name}')
+        os.sys(f'rmsynth3d {cube_name}Q_cube.fits {cube_name}U_cube.fits {cube_name}freq.txt -i {cube_name}I_masked.fits -v -l {phi_max} -s 30 -w "variance" -o {rm_name}')
         logger.info("IMAGE POLCAL: finished rmsynth3d")
         logger.info("")
         logger.info("")
