@@ -515,7 +515,7 @@ if args.do_plot ==True:
 print()
 print('Correcting for phase ambiguity')
 exec(open('/localwork/angelina/meerkat_virgo/ViMS/ViMS/scripts/xyamb_corr.py').read())
-S=xyamb(xytab=ptab_xf, qu=(0.8628247336,1.248991241) ,xyout=ptab_xfcorr)
+S=xyamb(xytab=ptab_xf ,xyout=ptab_xfcorr)
 
 if args.do_plot ==True:
     #plotms(vis=ptab_xfcorr, xaxis='chan',yaxis='phase',coloraxis='antenna1', plotfile=path+'/output/diagnostic_plots/polcal/'+str(obs)+'_Xfcal_phase_ambcorr.png',showgui=False,overwrite=True)
