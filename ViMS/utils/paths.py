@@ -2,12 +2,6 @@
 
 import os
 
-def get_working_directory():
-    """
-    Determine the working directory dynamically.
-    """
-    return os.getcwd()  # Assumes the script is run from the working directory
-
 def setup_output_dirs(obs_id):
     """
     Set up the OUTPUT/<obs_id> directory and its subdirectories.
@@ -18,7 +12,7 @@ def setup_output_dirs(obs_id):
     Returns:
         str: Path to the base output directory for the given observation.
     """
-    base_output_dir = os.path.join(get_working_directory(), "OUTPUT", obs_id)
+    base_output_dir = os.path.join("/lofar5", "OUTPUT", obs_id)
     subdirs = ["LOGS", "CAL_TABLES", "PLOTS", "CAL_IMAGES", "STOKES_CUBES", "IONEX_DATA"]
     
     for subdir in subdirs:

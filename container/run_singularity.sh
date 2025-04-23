@@ -13,6 +13,6 @@ if [ $@ ]; then
 else
 
     echo "Starting Singularity:" `ls -l /beegfs/bbf4346/vims.simg`
-    singularity run --pid --writable-tmpfs --cleanenv -B/home/bbf4346/data/victoria/ViMS:/ViMS,/home/bbf4346/:/a.benati/,/home/bbf4346/data/:/a.benati/lw/,/home/bbf4346/RadioTools:/RadioTools,/localwork/angelina:/angelina,/localwork/fdg:/localwork/fdg,/home/bba5268:/home/bba5268 /beegfs/bbf4346/vims.simg
+    singularity run --pid --writable-tmpfs --cleanenv -B/lofar5/bbf4346:/lofar5,/home/bbf4346/data/victoria/ViMS:/ViMS,/home/bbf4346/:/a.benati/,/home/bbf4346/data/:/a.benati/lw/,/home/bbf4346/RadioTools:/RadioTools,/localwork/angelina:/angelina,/localwork/fdg:/localwork/fdg,/home/bba5268:/home/bba5268 /beegfs/bbf4346/vims.simg
 
 fi

@@ -1,4 +1,3 @@
-
 import ephem
 import numpy as np
 import datetime
@@ -66,22 +65,9 @@ def add_column(table, col_name, like_col="DATA", like_type=None):
 parser = argparse.ArgumentParser(description="Parallactic corrector for MeerKAT")
 parser.add_argument("ms", type=str, help="Database to correct")
 parser.add_argument("--field", "-f", nargs='*', dest="field", type=int, default=0, help="Field index/indices to correct e.g -f 0 1")
-parser.add_argument("--specialEphem", "-se", dest="ephem", default=None, type=str, help="Use special ephemeris body as defined in PyEphem")
-parser.add_argument("--doPlot", "-dp", dest="plot", action="store_true", help="Make plots for specified field")
-parser.add_argument("--simulate", "-s", dest="sim", action="store_true", help="Simulate only -- make no modifications to database")
-parser.add_argument("--parangstep", "-pas", type=float, dest="stepsize", default=1., help="Parallactic angle correction step size in minutes")
-parser.add_argument("--chunksize", "-cs", type=int, dest="chunksize", default=1000, help="Chunk size in rows")
-parser.add_argument("--datadiscriptor", "-dd", type=int, dest="ddid", default=0, help="Select data descriptor (SPW)")
 parser.add_argument("--applyantidiag", "-ad", dest="flipfeeds", action="store_true", help="Apply anti-diagonal matrix -- flips the visibilty hands")
-parser.add_argument("--overridefeedangle", "-fa", dest="fa", default=None, help="Override the receptor angle stored in ::FEED for all antennae")
 parser.add_argument("--storecolumn", "-sc", dest="storecolumn", default="CORRECTED_DATA", help="Column to store corrected data to -- default CORRECTED_DATA -- must exist")
-parser.add_argument("--rawcolumn", "-rc", dest="rawcolumn", default="DATA", help="Column to read uncorrected data from -- default DATA -- must exist")
 parser.add_argument("--noparang", "-npa", dest="noparang", action="store_true", help="Apply no parallactic angle derotation -- useful only to apply feedflip matrix")
-parser.add_argument("--invertPA", "-ip", dest="invertpa", action="store_true", help="Apply parallactic angle corruption instead of correction")
-parser.add_argument("--crosshandphase", "-chp", dest="crossphase", default=0.0, type=float, help="Apply crosshand phase in degrees")
-parser.add_argument("--telescopelat", dest="latitude", default="-30:42:47.41", type=str, help="Telescope latitude dd:mm:ss")
-parser.add_argument("--telescopelon", dest="longitude", default="21:26:38.0", type=str, help="Telescope longitude dd:mm:ss")
-parser.add_argument("--telescopealt", dest="altitude", default=1054, type=float, help="Telescope altitude in meters")
 
 args = parser.parse_args()
 

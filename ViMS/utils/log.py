@@ -144,12 +144,13 @@ def append_to_google_doc(step_name, status, warnings=None, plot_link=None):
     print(f"Appended log response: {response}")
 
 # Function to upload a plot to Google Drive
-def upload_plot_to_drive(plot_path, plot_name):
+def upload_plot_to_drive(plot_name):
     """
     Upload a plot to Google Drive by calling the Flask backend.
     """
-    response = upload_plot(plot_path+plot_name)
+    response = upload_plot(plot_name)
     print(f"Appended log response: {response}")
+    return response
 
 # Function to initialize the Google Doc (called once at pipeline start)
 def initialize_google_doc_once():

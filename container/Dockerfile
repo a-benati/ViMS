@@ -188,6 +188,7 @@ RUN rm -rf /tmp/* && rm -rf /var/tmp/*
 ## Ragavi
 ####################################################################
 RUN python3.10 -m pip install "setuptools<69.0.0"
+RUN python3.10 -m pip install "bokeh<3.0.0"
 RUN python3.10 -m pip install ragavi
 
 ####################################################################
@@ -206,19 +207,15 @@ RUN /opt/py37_env/bin/pip install --upgrade gspread oauth2client google-api-pyth
 RUN /opt/py37_env/bin/pip install --force-reinstall --no-deps "protobuf<3.21"
 
 ####################################################################
-## Script for convolving to a common beam
+## radio-beam
 ####################################################################
-RUN curl -o /opt/beam.py https://raw.githubusercontent.com/radio-astro-tools/radio-beam/master/radio_beam/beam.py
-
-####################################################################
-## rmsynth3d
-####################################################################
-RUN cd /opt && git clone https://github.com/candersoncsiro/rmsynth3d.git
+RUN python3.10 -m pip install radio-beam
 
 ####################################################################
 ## RM-Tools
 ####################################################################
-RUN python3.10 -m pip install RM-Tools
+RUN cd /opt && git clone https://github.com/CIRADA-Tools/RM-Tools.git
+RUN cd /opt/RM-Tools && python3.10 setup.py build install
 
 ####################################################################
 ## pyrmsynth (my forked version wrapped for python3 and with updated setup.py)
@@ -242,6 +239,11 @@ RUN python3 -m pip install RMExtract
 RUN python3.10 -m pip install dask_expr==1.1.16
 RUN python3.10 -m pip install dask==2023.12.1
 RUN python3.10 -m pip install shadems
+
+####################################################################
+## Ephem
+####################################################################
+RUN python3.10 -m pip install ephem
 
 #####################################################################
 

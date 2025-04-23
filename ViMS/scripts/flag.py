@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-import sys, os
+import os, glob
 from utils import utils, log
 from casatasks import *
 
@@ -96,8 +96,6 @@ def run(logger, obs_id):
         log.append_to_google_doc("######################## FLAG ########################", "", warnings="", plot_link="")
         log.append_to_google_doc("######################################################", "", warnings="", plot_link="")
         log.append_to_google_doc("FLAG", "Started", warnings="", plot_link="")
-        # If there is a plot generated
-        # plot_url = upload_plot_to_drive("path/to/plot.png")
 
         # FLAGMANAGER FOR SAVING FLAGS
         logger.info("\n\n\n\n\n")
@@ -140,11 +138,15 @@ def run(logger, obs_id):
         logger.info("\n\n\n\n\n")
         logger.info("FLAG: Plotting MS file without flags...")
         logger.info("-------------------------------------------------------------------------------------")
-        plot_path = f"./OUTPUT/{obs_id}/PLOTS/"
+        plot_path = f"/a.benati/OUTPUT/{obs_id}/PLOTS/"
         plot_name = f"{obs_id}{{_field}}_before_flags.png"
-        stdout, stderr = utils.run_command(f"shadems -x FREQ -y amp --iter-field --dir {plot_path} \
-                                           --png {plot_name} {cal_ms}")
-        plot_link = log.upload_plot_to_drive(plot_path, plot_name)
+        cmd = f'shadems -x FREQ -y amp --iter-field --dir "{plot_path}" --png "{plot_name}" {cal_ms}'
+        stdout, stderr = utils.run_command(cmd)
+        plot_pattern = os.path.join(plot_path, f"{obs_id}*_before_flags.png")
+        plot_files = glob.glob(plot_pattern)
+        plot_links = []
+        for plot in plot_files:
+            plot_links.append(log.upload_plot_to_drive(plot))
         logger.info(stdout)
         if stderr:
             logger.error(f"Error in ShadeMS: {stderr}")
@@ -154,7 +156,9 @@ def run(logger, obs_id):
         logger.info("")
         logger.info("")
         logger.info("\n\n\n\n\n")
-        log.append_to_google_doc("FLAG", "Plotted MS file without flags", warnings="", plot_link=plot_link)
+        logger.info(plot_links)
+        for plot_link in plot_links:
+            log.append_to_google_doc("FLAG", "Plotted MS file without flags", warnings="", plot_link=plot_link)
 
         # FLAG AUTOCORRELATIONS
         logger.info("\n\n\n\n\n")
@@ -280,10 +284,15 @@ def run(logger, obs_id):
         logger.info("\n\n\n\n\n")
         logger.info("FLAG: Plotting MS file with all the flags...")
         logger.info("-------------------------------------------------------------------------------------")
-        plot_path = f"./OUTPUT/{obs_id}/PLOTS/"
+        plot_path = f"/a.benati/OUTPUT/{obs_id}/PLOTS/"
         plot_name = f"{obs_id}{{_field}}_after_flags.png"
         stdout, stderr = utils.run_command(f"shadems -x FREQ -y amp --iter-field --dir {plot_path} \
                                            --png {plot_name} {cal_ms}")
+        plot_pattern = os.path.join(plot_path, f"{obs_id}*_after_flags.png")
+        plot_files = glob.glob(plot_pattern)
+        plot_links = []
+        for plot in plot_files:
+            plot_links.append(log.upload_plot_to_drive(plot))
         logger.info(stdout)
         if stderr:
             logger.error(f"Error in ShadeMS: {stderr}")
