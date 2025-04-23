@@ -8,6 +8,7 @@ from pyrap.tables import taql
 from pyrap.quanta import quantity
 from pyrap.measures import measures
 from astropy import units
+import datetime
 import pytz
 import os,sys
 from utils import utils, log
@@ -46,7 +47,7 @@ def add_column(table, col_name, like_col="DATA", like_type=None):
         return True
     return False
 
-def correct_parang(ms_file, fields):
+def correct_parang(logger, ms_file, fields):
     """
     Correction of the parallactic angle
 
@@ -65,7 +66,7 @@ def correct_parang(ms_file, fields):
         pos = t.getcol("PHASE_DIR")
 
     for f in fields:
-        log.info("Processing field {}: {}".format(f, fieldnames[f]))
+        logger.info("Processing field {}: {}".format(f, fieldnames[f]))
 
         with tbl(ms_file, ack=False) as t:
             with taql("select * from $t where FIELD_ID=={}".format(f)) as tt:
@@ -75,7 +76,7 @@ def correct_parang(ms_file, fields):
                 dbtime = tt.getcol("TIME_CENTROID")
                 start_time_Z = __to_datetimestr(dbtime.min())
                 end_time_Z = __to_datetimestr(dbtime.max())
-                log.info("Observation spans '{}' and '{}' UTC".format(
+                logger.info("Observation spans '{}' and '{}' UTC".format(
                         start_time_Z, end_time_Z))
         dm = measures()
         ephemobservatory.date = start_time_Z
@@ -85,7 +86,7 @@ def correct_parang(ms_file, fields):
         TO_SEC = 3600*24.0
         nstep = int(np.round((float(et)*TO_SEC - float(st)*TO_SEC) / (args.stepsize*60.)))
         if not args.noparang:
-            log.info("Computing PA in {} steps of {} mins each".format(nstep, args.stepsize))
+            logger.info("Computing PA in {} steps of {} mins each".format(nstep, args.stepsize))
         timepa = time = np.linspace(st,et,nstep)
         timepadt = list(map(lambda x: ephem.Date(x).datetime(), time))
 
@@ -101,7 +102,7 @@ def correct_parang(ms_file, fields):
             fieldEphem = getattr(ephem, args.ephem, None)()
             if not fieldEphem:
                 raise RuntimeError("Body {} not defined by PyEphem".format(args.ephem))
-            log.info("Overriding stored ephemeris in database '{}' field '{}' by special PyEphem body '{}'".format(
+            logger.info("Overriding stored ephemeris in database '{}' field '{}' by special PyEphem body '{}'".format(
                 ms_file, fieldnames[f], args.ephem))
         else:
             with tbl(ms_file+"::FIELD", ack=False) as t:
@@ -111,7 +112,7 @@ def correct_parang(ms_file, fields):
             rahms = "{0:.0f}:{1:.0f}:{2:.5f}".format(*skypos.ra.hms)
             decdms = "{0:.0f}:{1:.0f}:{2:.5f}".format(skypos.dec.dms[0], abs(skypos.dec.dms[1]), abs(skypos.dec.dms[2]))
             fieldEphem = ephem.readdb(",f|J,{},{},0.0".format(rahms, decdms))
-            log.info("Using coordinates of field '{}' for body: J2000, {}, {}".format(fieldnames[f],
+            logger.info("Using coordinates of field '{}' for body: J2000, {}, {}".format(fieldnames[f],
                                                                                     np.rad2deg(pos[f][0,0]),
                                                                                     np.rad2deg(pos[f][0,1])))
 
@@ -183,11 +184,11 @@ def correct_parang(ms_file, fields):
                     receptor_angles = dict(zip(receptor_aid, tt.getcol("RECEPTOR_ANGLE")[:,0]))
                     if args.fa is not None:
                         receptor_angles[...] = float(args.fa)
-                        log.info("Overriding F Jones angle to {0:.3f} for all antennae".format(float(args.fa)))
+                        logger.info("Overriding F Jones angle to {0:.3f} for all antennae".format(float(args.fa)))
                     else:
-                        log.info("Applying the following feed angle offsets to parallactic angles:")
+                        logger.info("Applying the following feed angle offsets to parallactic angles:")
                         for ai, an in enumerate(anames):
-                            log.info("\t {0:s}: {1:.3f} degrees".format(an, np.rad2deg(receptor_angles.get(ai, 0.0))))
+                            logger.info("\t {0:s}: {1:.3f} degrees".format(an, np.rad2deg(receptor_angles.get(ai, 0.0))))
 
                 raarr = np.empty(len(anames), dtype=int)
                 for aid in range(len(anames)):
@@ -205,32 +206,32 @@ def correct_parang(ms_file, fields):
             chan_freqs = t.getcol("CHAN_FREQ")[spwsel]
             chan_width = t.getcol("CHAN_WIDTH")[spwsel]
             nchan = chan_freqs.size
-            log.info("Will apply to SPW {0:d} ({3:d} channels): {1:.2f} to {2:.2f} MHz".format(
+            logger.info("Will apply to SPW {0:d} ({3:d} channels): {1:.2f} to {2:.2f} MHz".format(
                 spwsel, chan_freqs.min()*1e-6, chan_freqs.max()*1e-6, nchan))
         list_apply = []
         if abs(args.crossphase) > 1.0e-6:
-            log.info("Applying crosshand phase matrix (X) with {0:.3f} degrees".format(args.crossphase))
+            logger.info("Applying crosshand phase matrix (X) with {0:.3f} degrees".format(args.crossphase))
             list_apply.append("X Jones")
         if not args.noparang:
             list_apply.append("P+F Jones")
         if args.flipfeeds:
-            log.info("Will flip the visibility hands per user request")
+            logger.info("Will flip the visibility hands per user request")
             list_apply.append("Anti-diagonal Jones")
-        log.info("Arranging to apply (inversion):")
+        logger.info("Arranging to apply (inversion):")
         for j in list_apply:
-            log.info("\t{}".format(j))
+            logger.info("\t{}".format(j))
         if args.invertpa:
             log.warning("Note: Applying corrupting P+F Jones, instead of correction per user request")
 
         if not args.sim:
-            log.info("Storing corrected data into '{}'".format(args.storecolumn))
+            logger.info("Storing corrected data into '{}'".format(args.storecolumn))
             timepaunix = np.array(list(map(lambda x: x.replace(tzinfo=pytz.UTC).timestamp(), timepadt)))
             nrowsput = 0
             with tbl(ms_file, ack=False, readonly=False) as t:
                 if args.storecolumn not in t.colnames():
-                    log.info(f"Inserting column {args.storecolumn}. Do not interrupt")
+                    logger.info(f"Inserting column {args.storecolumn}. Do not interrupt")
                     add_column(t, args.storecolumn)
-                    log.info(f"Inserted column {args.storecolumn}")
+                    logger.info(f"Inserted column {args.storecolumn}")
                 with taql("select * from $t where FIELD_ID=={} and DATA_DESC_ID=={}".format(f, args.ddid)) as tt:
                     nrow = tt.nrows()
                     nchunk = nrow // args.chunksize + int(nrow % args.chunksize > 0)
@@ -304,11 +305,11 @@ def correct_parang(ms_file, fields):
 
                         corr_data = np.matmul(JA1, np.matmul(data, JA2)).reshape(crow, nchan, 4)
                         tt.putcol(args.storecolumn, corr_data, startrow=cl, nrow=crow)
-                        log.info("\tCorrected chunk {}/{}".format(ci+1, nchunk))
+                        logger.info("\tCorrected chunk {}/{}".format(ci+1, nchunk))
                         nrowsput += crow
                 assert nrow == nrowsput
         else:
-            log.info("Simulating correction only -- no changes applied to data")
+            logger.info("Simulating correction only -- no changes applied to data")
 
 
 
@@ -318,4 +319,4 @@ def correct_parang(ms_file, fields):
 
 def run(logger, obs_id):
     cal_ms = "/a.benati/lw/victoria/tests/flag/obs01_1662797070_sdp_l0-cal_copy.ms"
-    correct_parang(cal_ms, [0, 1, 2])
+    correct_parang(logger, cal_ms, [0, 1, 2])
