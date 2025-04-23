@@ -6,7 +6,7 @@ from utils import paths, log
 # Delete old CASA log files
 log.delete_old_casa_logs()
 
-from scripts import flag
+from scripts import flag, crosscal
 
 # List of observation IDs
 obs_ids = ["obs01"]
