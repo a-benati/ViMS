@@ -4,7 +4,7 @@ import os, glob
 from utils import utils, log
 from casatasks import *
 
-cal_ms = "/a.benati/lw/victoria/tests/flag/obs01_1662797070_sdp_l0-cal_copy.ms"
+#cal_ms = "/a.benati/lw/victoria/tests/flag/obs01_1662797070_sdp_l0-cal_copy.ms"
 
 def log_flagsum(summary, logger):
     """
@@ -82,7 +82,7 @@ def append_flagsum_google_doc(summary):
                                  warnings="", plot_link="")
         log.append_to_google_doc("", "", warnings="", plot_link="")
 
-def run(logger, obs_id):
+def run(logger, obs_id, cal_ms, path):
     logger.info("")
     logger.info("")
     logger.info("##########################################################")
@@ -101,7 +101,7 @@ def run(logger, obs_id):
         logger.info("\n\n\n\n\n")
         logger.info("FLAG: Saving flags...")
         flagmanager(vis=cal_ms,\
-                            mode="save",versionname="obs01_flag_before",oldname="",comment="",\
+                            mode="save",versionname=f"{obs_id}_flag_before",oldname="",comment="",\
                             merge="replace")
         log.redirect_casa_log(logger)
         logger.info("FLAG: Saved flags\n\n\n\n\n")
@@ -138,7 +138,8 @@ def run(logger, obs_id):
         logger.info("\n\n\n\n\n")
         logger.info("FLAG: Plotting MS file without flags...")
         logger.info("-------------------------------------------------------------------------------------")
-        plot_path = f"/a.benati/OUTPUT/{obs_id}/PLOTS/"
+        #plot_path = f"/a.benati/OUTPUT/{obs_id}/PLOTS/"
+        plot_path = path + "/PLOTS/"
         plot_name = f"{obs_id}{{_field}}_before_flags.png"
         cmd = f'shadems -x FREQ -y amp --iter-field --dir "{plot_path}" --png "{plot_name}" {cal_ms}'
         stdout, stderr = utils.run_command(cmd)
@@ -269,6 +270,19 @@ def run(logger, obs_id):
         logger.info("")
         log.append_to_google_doc("FLAG", "Flagged with AOFlagger (Annalisa's strategy) 2nd time", warnings="", plot_link="")
 
+        # FLAGMANAGER FOR SAVING FLAGS
+        logger.info("\n\n\n\n\n")
+        logger.info("FLAG: Saving flags...")
+        flagmanager(vis=cal_ms,\
+                            mode="save",versionname=f"{obs_id}_flag_after",oldname="",comment="",\
+                            merge="replace")
+        log.redirect_casa_log(logger)
+        logger.info("FLAG: Saved flags\n\n\n\n\n")
+        logger.info("")
+        logger.info("")
+        logger.info("")
+        log.append_to_google_doc("FLAG", "Saved flags", warnings="", plot_link="")
+
         #FLAG SUMMARY
         logger.info("\n\n\n\n\n")
         logger.info("FLAG: Printing flagging summary...")
@@ -284,7 +298,8 @@ def run(logger, obs_id):
         logger.info("\n\n\n\n\n")
         logger.info("FLAG: Plotting MS file with all the flags...")
         logger.info("-------------------------------------------------------------------------------------")
-        plot_path = f"/a.benati/OUTPUT/{obs_id}/PLOTS/"
+        #plot_path = f"/a.benati/OUTPUT/{obs_id}/PLOTS/"
+        plot_path = path + "/PLOTS/"
         plot_name = f"{obs_id}{{_field}}_after_flags.png"
         stdout, stderr = utils.run_command(f"shadems -x FREQ -y amp --iter-field --dir {plot_path} \
                                            --png {plot_name} {cal_ms}")

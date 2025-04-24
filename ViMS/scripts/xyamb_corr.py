@@ -1,8 +1,8 @@
 
 
-def xyamb(xytab, xyout=''):
+def xyamb(logger, xytab, xyout=''):
     import time
-    #from casatools import table as tb
+    from casatools import table
     import numpy as np
     """
     Resolve the 180-degree cross-hand phase ambiguity in a CASA calibration table.
@@ -14,6 +14,7 @@ def xyamb(xytab, xyout=''):
     xyout : str, optional
         Path to the output calibration table. If not specified, the input table is modified in place.
     """
+    tb=table()
 
     if xyout == '':
         xyout = xytab
@@ -24,7 +25,6 @@ def xyamb(xytab, xyout=''):
         tb.close()
     
 
-    #tb=table()
     tb.open(xyout, nomodify=False)
 
     spw_ids = np.unique(tb.getcol('SPECTRAL_WINDOW_ID'))
@@ -38,7 +38,7 @@ def xyamb(xytab, xyout=''):
             num_channels = c.shape[1]
             flipped_channels=0
             avg_phase = np.angle(np.mean(c[0, :, :][~fl[0,:,:]]), True)
-            print('Average phase = '+str(avg_phase))
+            logger.info('xyamb: Average phase = '+str(avg_phase))
             for ch in range(num_channels):
                 valid_data = c[0,ch,:][~fl[0,ch,:]]
                 if valid_data.size > 0:
@@ -52,7 +52,7 @@ def xyamb(xytab, xyout=''):
                         c[0, ch, :] *= -1.0
                         st.putcol('CPARAM', c)
             
-            print('Flipped '+str(flipped_channels)+' channels in SPW '+str(spw))
+            logger.info('xyamb: Flipped '+str(flipped_channels)+' channels in SPW '+str(spw))
 
 
             st.close()

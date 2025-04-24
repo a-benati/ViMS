@@ -12,26 +12,26 @@ def free_space(path):
     mb = (1024*1024)
     return (total/mb, used/mb, free/mb)
 
-def cal_lib(obs_id, logger, target):
+def cal_lib(obs_id, logger, target, path):
     """
     create a library containing all the crosscal calibration tables.
     Used for OTF calibration in mstransform (does not contain any gaintables)
     """
     logger.info('Collect calibration tables applied to to target fields')
     tables = [
-        f'caltable="/lofar5/bbf4346/OUTPUT/{obs_id}/CAL_TABLES/{obs_id}_calib.Kcal" calwt=False tinterp="nearest" finterp="linear" fldmap="nearest" field="{target}" spwmap=0',
-        f'caltable="/lofar5/bbf4346/OUTPUT/{obs_id}/CAL_TABLES/{obs_id}_calib.kcrosscal" calwt=False tinterp="nearest" finterp="linear" fldmap="nearest" field="{target}" spwmap=0',
-        f'caltable="/lofar5/bbf4346/OUTPUT/{obs_id}/CAL_TABLES/{obs_id}_calib.xf.ambcorr" calwt=False tinterp="nearest" finterp="linear" fldmap="nearest" field="{target}" spwmap=0',
-        f'caltable="/lofar5/bbf4346/OUTPUT/{obs_id}/CAL_TABLES/{obs_id}_calib.bandpass2" calwt=False tinterp="nearest" finterp="linear" fldmap="nearest" field="{target}" spwmap=0',
-        f'caltable="/lofar5/bbf4346/OUTPUT/{obs_id}/CAL_TABLES/{obs_id}_calib.T.pol" calwt=False tinterp="nearest" finterp="linear" fldmap="nearest" field="{target}" spwmap=0',
-        f'caltable="/lofar5/bbf4346/OUTPUT/{obs_id}/CAL_TABLES/{obs_id}_calib.df2" calwt=False tinterp="nearest" finterp="linear" fldmap="nearest" field="{target}" spwmap=0',
+        f'caltable="{path}/CAL_TABLES/{obs_id}_calib.Kcal" calwt=False tinterp="nearest" finterp="linear" fldmap="nearest" field="{target}" spwmap=0',
+        f'caltable="{path}/CAL_TABLES/{obs_id}_calib.kcrosscal" calwt=False tinterp="nearest" finterp="linear" fldmap="nearest" field="{target}" spwmap=0',
+        f'caltable="{path}/CAL_TABLES/{obs_id}_calib.xf.ambcorr" calwt=False tinterp="nearest" finterp="linear" fldmap="nearest" field="{target}" spwmap=0',
+        f'caltable="{path}/CAL_TABLES/{obs_id}_calib.bandpass2" calwt=False tinterp="nearest" finterp="linear" fldmap="nearest" field="{target}" spwmap=0',
+        f'caltable="{path}/CAL_TABLES/{obs_id}_calib.T.pol" calwt=False tinterp="nearest" finterp="linear" fldmap="nearest" field="{target}" spwmap=0',
+        f'caltable="{path}/CAL_TABLES/{obs_id}_calib.df2" calwt=False tinterp="nearest" finterp="linear" fldmap="nearest" field="{target}" spwmap=0',
     ]
 
-    lib = open(f'/lofar5/bbf4346/OUTPUT/{obs_id}/CAL_TABLES/{obs_id}_calib_tables.txt','w')
+    lib = open(f'{path}/CAL_TABLES/{obs_id}_calib_tables.txt','w')
     for table in tables:
         lib.write(f"{table}\n")
     lib.close()
-    logger.info(f'Successfully wrote all tables to a file: /lofar5/bbf4346/OUTPUT/{obs_id}/CAL_TABLES/{obs_id}_calib_tables.txt')
+    logger.info(f'Successfully wrote all tables to a file: {path}/CAL_TABLES/{obs_id}_calib_tables.txt')
 
 
 def split_cal(logger, obs_id):
@@ -43,15 +43,15 @@ def split_cal(logger, obs_id):
     ms = glob.glob(f'{obs_id}_*l0.ms')
     full_ms = f'/lofar4/bba5268/meerkat_virgo/{ms}'
     base, ext = os.path.splitext(ms)
-    split_ms = f'/lofar5/bbf4346/OUTPUT/{obs_id}/MS_FILES/{base}-cal{ext}'
+    split_ms = f'{path}/MS_FILES/{base}-cal{ext}'
 
     logger.info(f'Splitting the calibrators of file {full_ms}')
     logger.info(f'Creating calibrators ms file {split_ms}')
 
     cal_size = file_size(split_ms)
-    space_left = free_space('/lofar5/bba5268/meerkat_virgo')
+    space_left = free_space(f'{path}')
 
-    logger.info(f'Size of the calibrator file:{cal_size} MB. Space left in target path /lofar5/bbf4346/OUTPUT/{obs_id}/MS_FILES/; {space_left[2]}/{space_left[0]} MB')
+    logger.info(f'Size of the calibrator file:{cal_size} MB. Space left in target path {path}/MS_FILES/; {space_left[2]}/{space_left[0]} MB')
 
     mstransform(vis=full_ms, outputvis=split_ms, createmms=False,\
                 separationaxis="auto",numsubms="auto", tileshape=[0],field="J1939-6342,J1150-0023,J1331+3030",spw="0:0.9~1.65GHz",scan="",antenna="",\
@@ -62,6 +62,7 @@ def split_cal(logger, obs_id):
                 nthreads=1,niter=1, disableparallel=False,ddistart=-1,taql="",monolithic_processing=False,reindex=True)
     
     logger.info('Saved calibrator ms file succecsfully')
+    return split_ms
 
     
 def split_targets(obs_id, logger):
@@ -98,8 +99,8 @@ def split_targets(obs_id, logger):
         logger.info(f'Creating target ms file {split_ms}')
 
         cal_size = file_size(split_ms)
-        space_left = free_space('/lofar5/bba5268/meerkat_virgo')
-        logger.info(f'Size of the target file:{cal_size} MB. Space left in target path /lofar5/bba5268/meerkat_virgo; {space_left[2]}/{space_left[0]} MB')
+        space_left = free_space(f'{path}')
+        logger.info(f'Size of the target file:{cal_size} MB. Space left in target path {path}; {space_left[2]}/{space_left[0]} MB')
 
         mstransform(vis=full_ms,outputvis=split_ms,createmms=False,\
                 separationaxis="auto",numsubms="auto",tileshape=[0],field=target,spw="",scan="",antenna="", correlation="",timerange="",intent="",\

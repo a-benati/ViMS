@@ -35,18 +35,18 @@ for obs_id in obs_ids:
     log.log_obs_header(logger, obs_id)
     log.log_obs_header_google_doc(obs_id)
 
-    # Split full msfile into calibrator ms file
-    cal_ms.split_cal(logger, obs_id)  
+    # Split full msfile into calibrator ms file (returns it as a string)
+    cal_ms_file = cal_ms.split_cal(logger, obs_id)  
     
     ##########################################################
     ########################## FLAG ##########################
     ##########################################################
-    flag.run(logger, obs_id)
+    flag.run(logger, obs_id, cal_ms_file, output_dir)
 
     ##########################################################
     ######################## CROSSCAL ########################
     ##########################################################
-    crosscal.run(logger, obs_id)
+    crosscal.run(logger, obs_id, cal_ms_file, output_dir)
 
     ##########################################################
     ####################### POLCAL IM ########################
