@@ -116,10 +116,13 @@ tb.close()
 
 
 flag_versions = flagmanager(vis=calms, mode='list')
-inital_flag = any(entry['name'] == obs+'_initial_flag' for entry in flag_versions.values())
 
+if isinstance(flag_versions, dict) and 'version' in flag_versions.values():
+    initial_flag = any(entry['name'] == obs+'_initial_flag' for entry in flag_versions.values())
+else:
+    initial_flag = False
 
-if inital_flag:
+if initial_flag:
     flagmanager(vis=calms, mode='restore', versionname=obs+'_initial_flag', merge='replace')
     print("Found '"+obs+"_initial_flag'. Restoring it.")
 

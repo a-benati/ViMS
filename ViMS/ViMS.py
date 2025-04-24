@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 
 import os
-from utils import paths, log
+from utils import paths, log, cal_ms
 
 # Delete old CASA log files
 log.delete_old_casa_logs()
 
-from scripts import flag, crosscal
+from scripts import flag, crosscal, im_polcal
 
 # List of observation IDs
 obs_ids = ["obs01"]
@@ -34,6 +34,9 @@ for obs_id in obs_ids:
     # Log the obs header
     log.log_obs_header(logger, obs_id)
     log.log_obs_header_google_doc(obs_id)
+
+    # Split full msfile into calibrator ms file
+    cal_ms.split_cal(logger, obs_id)  
     
     ##########################################################
     ########################## FLAG ##########################
@@ -44,6 +47,11 @@ for obs_id in obs_ids:
     ######################## CROSSCAL ########################
     ##########################################################
     crosscal.run(logger, obs_id)
+
+    ##########################################################
+    ####################### POLCAL IM ########################
+    ##########################################################
+    im_polcal.run(logger, obs_id)   
     
     # Log the obs footer
     log.log_obs_footer(logger, obs_id)
