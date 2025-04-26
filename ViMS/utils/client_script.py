@@ -42,7 +42,7 @@ def setup_doc():
     response = requests.post(url)
     return response.json()
 
-def initialize_google_doc():
+def initialize_google_docs():
     url = "http://34.173.57.167:5000/initialize_google_doc"
     response = requests.post(url)
     return response.json()
