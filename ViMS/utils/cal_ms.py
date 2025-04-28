@@ -34,14 +34,14 @@ def cal_lib(obs_id, logger, target, path):
     logger.info(f'Successfully wrote all tables to a file: {path}/CAL_TABLES/{obs_id}_calib_tables.txt')
 
 
-def split_cal(logger, obs_id):
+def split_cal(logger, obs_id, path):
     from casatasks import mstransform
     """
     split data of the calibrators of the full ms-file into a calibrator ms-file
     """
 
     ms = glob.glob(f'{obs_id}_*l0.ms')
-    full_ms = f'/lofar4/bba5268/meerkat_virgo/{ms}'
+    full_ms = f'/lofar2/p1uy068/meerkat-virgo/raw/{ms}'
     base, ext = os.path.splitext(ms)
     split_ms = f'{path}/MS_FILES/{base}-cal{ext}'
 
@@ -65,7 +65,7 @@ def split_cal(logger, obs_id):
     return split_ms
 
     
-def split_targets(obs_id, logger):
+def split_targets(obs_id, logger, path):
     from casatasks import mstransform
     from casatools import msmetadata
     """
@@ -95,7 +95,7 @@ def split_targets(obs_id, logger):
     base, ext = os.path.splitext(ms)
 
     for target in targets:
-        split_ms = f'/lofar5/bba5268/meerkat_virgo/{base}-{target}{ext}'
+        split_ms = f'{path}/MS_FILES/{base}-{target}{ext}'
         logger.info(f'Creating target ms file {split_ms}')
 
         cal_size = file_size(split_ms)

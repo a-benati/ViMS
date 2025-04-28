@@ -15,6 +15,7 @@ from utils import utils, log
 from casatasks import *
 from casatools import table
 
+#---------------------------------------------------------------------
 def add_column(table, col_name, like_col="DATA", like_type=None):
     """
     Lifted from ratt-ru/cubical
@@ -47,9 +48,73 @@ def add_column(table, col_name, like_col="DATA", like_type=None):
         return True
     return False
 
-def correct_parang(logger, ms_file, fields):
+#----------------------------------------------------------------------
+def xyamb(logger, xytab, xyout=''):
+    import time
+    from casatools import table
+    import numpy as np
     """
-    Correction of the parallactic angle
+    Resolve the 180-degree cross-hand phase ambiguity in a CASA calibration table.
+    CAlculates the mean phase and shifts every point deviating more then 90 degrees from the mean phase by 180 degrees.
+
+    Parameters:
+    xytab : str
+        Path to the input calibration table.
+    xyout : str, optional
+        Path to the output calibration table. If not specified, the input table is modified in place.
+    """
+    tb=table()
+
+    if xyout == '':
+        xyout = xytab
+    if xyout != xytab:
+        tb.open(xytab)
+        tb.copy(xyout)
+        tb.clearlocks()
+        tb.close()
+
+    tb.open(xyout, nomodify=False)
+
+    spw_ids = np.unique(tb.getcol('SPECTRAL_WINDOW_ID'))
+
+    for spw in spw_ids:
+        st = tb.query('SPECTRAL_WINDOW_ID=='+str(spw))
+        if st.nrows() > 0:
+            c = st.getcol('CPARAM')
+            fl = st.getcol('FLAG')
+
+            num_channels = c.shape[1]
+            flipped_channels=0
+            avg_phase = np.angle(np.mean(c[0, :, :][~fl[0,:,:]]), True)
+            logger.info('xyamb: Average phase = '+str(avg_phase))
+            for ch in range(num_channels):
+                valid_data = c[0,ch,:][~fl[0,ch,:]]
+                if valid_data.size > 0:
+                    xyph0 = np.angle(np.mean(valid_data), True)
+
+                    # Calculate the phase difference
+                    phase_diff =  np.abs(((xyph0 - avg_phase)))
+
+                    if phase_diff >= 100.0:
+                        flipped_channels += 1
+                        c[0, ch, :] *= -1.0
+                        st.putcol('CPARAM', c)
+            
+            logger.info('xyamb: Flipped '+str(flipped_channels)+' channels in SPW '+str(spw))
+
+
+            st.close()
+            time.sleep(1)
+    
+    tb.clearlocks()
+    tb.flush()
+    tb.close()
+    time.sleep(1)
+
+#-------------------------------------------------------------------------------------------------
+def correct_parang(logger, ms_file, fields, ddid=0, storecolumn='DATA', rawcolumn='DATA'):
+    """
+    swaps feeds of the given fields. Saves swapped feeds in DATA column per default
 
     Args:
         ms_file (str): ms file to correct
@@ -84,9 +149,7 @@ def correct_parang(logger, ms_file, fields):
         ephemobservatory.date = end_time_Z
         et = ephemobservatory.date
         TO_SEC = 3600*24.0
-        nstep = int(np.round((float(et)*TO_SEC - float(st)*TO_SEC) / (args.stepsize*60.)))
-        if not args.noparang:
-            logger.info("Computing PA in {} steps of {} mins each".format(nstep, args.stepsize))
+        nstep = int(np.round((float(et)*TO_SEC - float(st)*TO_SEC) / (1*60.)))
         timepa = time = np.linspace(st,et,nstep)
         timepadt = list(map(lambda x: ephem.Date(x).datetime(), time))
 
@@ -96,31 +159,22 @@ def correct_parang(logger, ms_file, fields):
             aposdm = list(map(lambda pos: dm.position('itrf',*[ quantity(x,'m') for x in pos ]),
                             apos))
 
-        if args.ephem:
-            with tbl(ms_file+"::FIELD", ack=False) as t:
-                fieldnames = t.getcol("NAME")
-            fieldEphem = getattr(ephem, args.ephem, None)()
-            if not fieldEphem:
-                raise RuntimeError("Body {} not defined by PyEphem".format(args.ephem))
-            logger.info("Overriding stored ephemeris in database '{}' field '{}' by special PyEphem body '{}'".format(
-                ms_file, fieldnames[f], args.ephem))
-        else:
-            with tbl(ms_file+"::FIELD", ack=False) as t:
-                fieldnames = t.getcol("NAME")
-                pos = t.getcol("PHASE_DIR")
-            skypos = SkyCoord(pos[f][0,0]*units.rad, pos[f][0,1]*units.rad, frame="fk5")
-            rahms = "{0:.0f}:{1:.0f}:{2:.5f}".format(*skypos.ra.hms)
-            decdms = "{0:.0f}:{1:.0f}:{2:.5f}".format(skypos.dec.dms[0], abs(skypos.dec.dms[1]), abs(skypos.dec.dms[2]))
-            fieldEphem = ephem.readdb(",f|J,{},{},0.0".format(rahms, decdms))
-            logger.info("Using coordinates of field '{}' for body: J2000, {}, {}".format(fieldnames[f],
+        with tbl(ms_file+"::FIELD", ack=False) as t:
+            fieldnames = t.getcol("NAME")
+            pos = t.getcol("PHASE_DIR")
+        skypos = SkyCoord(pos[f][0,0]*units.rad, pos[f][0,1]*units.rad, frame="fk5")
+        rahms = "{0:.0f}:{1:.0f}:{2:.5f}".format(*skypos.ra.hms)
+        decdms = "{0:.0f}:{1:.0f}:{2:.5f}".format(skypos.dec.dms[0], abs(skypos.dec.dms[1]), abs(skypos.dec.dms[2]))
+        fieldEphem = ephem.readdb(",f|J,{},{},0.0".format(rahms, decdms))
+        logger.info("Using coordinates of field '{}' for body: J2000, {}, {}".format(fieldnames[f],
                                                                                     np.rad2deg(pos[f][0,0]),
                                                                                     np.rad2deg(pos[f][0,1])))
-
+        
         with tbl(ms_file+"::DATA_DESCRIPTION", ack=False) as t:
-            if args.ddid < 0 or args.ddid >= t.nrows():
+            if ddid < 0 or ddid >= t.nrows():
                 raise RuntimeError("Invalid DDID selected")
-            spwsel = t.getcol("SPECTRAL_WINDOW_ID")[args.ddid]
-            poldescsel = t.getcol("POLARIZATION_ID")[args.ddid]
+            spwsel = t.getcol("SPECTRAL_WINDOW_ID")[ddid]
+            poldescsel = t.getcol("POLARIZATION_ID")[ddid]
         
 
         az = np.zeros(nstep, dtype=np.float32)
@@ -133,68 +187,7 @@ def correct_parang(logger, ms_file, fields):
         pa = np.zeros((len(anames), nstep), np.float32)
 
         zenith = dm.direction('AZELGEO','0deg','90deg')
-        if not args.noparang:
-            for ti, t in enumerate(time):
-                ephemobservatory.date = t
-                t_iso8601 = ephemobservatory.date.datetime().strftime("%Y-%m-%dT%H:%M:%S.%f")
-                fieldEphem.compute(ephemobservatory)
-                az[ti] = fieldEphem.az
-                el[ti] = fieldEphem.alt
-                ra[ti] = fieldEphem.a_ra
-                dec[ti] = fieldEphem.a_dec
-                arraypa[ti] = fieldEphem.parallactic_angle()
-                # compute PA per antenna
-                field_centre = dm.direction('J2000', quantity(ra[ti],"rad"), quantity(dec[ti],"rad"))
-                dm.do_frame(dm.epoch("UTC", quantity(t_iso8601)))
-                #dm.doframe(aposdm[0])
-                #field_centre = dm.measure(dm.direction('moon'), "J2000")
-                #racc[ti] = field_centre["m0"]["value"]
-                #deccc[ti] = field_centre["m1"]["value"]
-                for ai in range(len(anames)):
-                    dm.doframe(aposdm[ai])
-                    pa[ai, ti] = dm.posangle(field_centre,zenith).get_value("rad")
-            if args.plot:
-                def __angdiff(a, b):
-                    return ((a-b) + 180) % 360 - 180
-                for axl, axd in zip(["Az", "El", "RA", "DEC", "ParAng"],
-                                    [az, el, ra, dec, pa]):
-                    hfmt = mdates.DateFormatter('%H:%M')
-                    fig = plt.figure(figsize=(16,8))
-                    ax = fig.add_subplot(111)
-                    ax.set_xlabel("Time UTC")
-                    ax.set_ylabel("{} [deg]".format(axl))
-                    if axl == "ParAng":
-                        ax.errorbar(timepadt,
-                                    np.rad2deg(np.mean(axd, axis=0)),
-                                    capsize=2,
-                                    yerr=0.5*__angdiff(np.rad2deg(axd.max(axis=0)),
-                                                    np.rad2deg(axd.min(axis=0))), label="CASACORE")
-                        plt.plot(timepadt, np.rad2deg(arraypa), label="PyEphem")
-                    else:
-                        ax.plot(timepadt, np.rad2deg(axd))
-                    ax.xaxis.set_major_formatter(hfmt)
-                    ax.grid(True)
-                    plt.show()
-
-            with tbl(ms_file+"::FEED", ack=False) as t:
-                with taql("select * from $t where SPECTRAL_WINDOW_ID=={}".format(spwsel)) as tt:
-                    receptor_aid = tt.getcol("ANTENNA_ID")
-                    if len(receptor_aid) != len(anames):
-                        raise RuntimeError("Receptor angles not all filed for the antennas in the ::FEED keyword table")
-                    receptor_angles = dict(zip(receptor_aid, tt.getcol("RECEPTOR_ANGLE")[:,0]))
-                    if args.fa is not None:
-                        receptor_angles[...] = float(args.fa)
-                        logger.info("Overriding F Jones angle to {0:.3f} for all antennae".format(float(args.fa)))
-                    else:
-                        logger.info("Applying the following feed angle offsets to parallactic angles:")
-                        for ai, an in enumerate(anames):
-                            logger.info("\t {0:s}: {1:.3f} degrees".format(an, np.rad2deg(receptor_angles.get(ai, 0.0))))
-
-                raarr = np.empty(len(anames), dtype=int)
-                for aid in range(len(anames)):
-                    raarr[aid] = receptor_angles[aid]
-
-
+        
         with tbl(ms_file+"::POLARIZATION", ack=False) as t:
             poltype = t.getcol("CORR_TYPE")[poldescsel]
             # must be linear
@@ -209,113 +202,87 @@ def correct_parang(logger, ms_file, fields):
             logger.info("Will apply to SPW {0:d} ({3:d} channels): {1:.2f} to {2:.2f} MHz".format(
                 spwsel, chan_freqs.min()*1e-6, chan_freqs.max()*1e-6, nchan))
         list_apply = []
-        if abs(args.crossphase) > 1.0e-6:
-            logger.info("Applying crosshand phase matrix (X) with {0:.3f} degrees".format(args.crossphase))
-            list_apply.append("X Jones")
-        if not args.noparang:
-            list_apply.append("P+F Jones")
-        if args.flipfeeds:
-            logger.info("Will flip the visibility hands per user request")
-            list_apply.append("Anti-diagonal Jones")
+
+        logger.info("Will flip the visibility hands per user request")
+        list_apply.append("Anti-diagonal Jones")
+        
         logger.info("Arranging to apply (inversion):")
         for j in list_apply:
             logger.info("\t{}".format(j))
-        if args.invertpa:
-            log.warning("Note: Applying corrupting P+F Jones, instead of correction per user request")
+        
+        logger.info("Storing corrected data into '{}'".format(storecolumn))
+        timepaunix = np.array(list(map(lambda x: x.replace(tzinfo=pytz.UTC).timestamp(), timepadt)))
+        nrowsput = 0
+        with tbl(ms_file, ack=False, readonly=False) as t:
+            if storecolumn not in t.colnames():
+                logger.info(f"Inserting column {storecolumn}. Do not interrupt")
+                add_column(t, storecolumn)
+                logger.info(f"Inserted column {storecolumn}")
+            with taql("select * from $t where FIELD_ID=={} and DATA_DESC_ID=={}".format(f, ddid)) as tt:
+                nrow = tt.nrows()
+                nchunk = nrow // 1000 + int(nrow % 1000 > 0)
+                for ci in range(nchunk):
+                    cl = ci * 1000
+                    crow = min(nrow - ci * 1000, 1000)
+                    data = tt.getcol(rawcolumn, startrow=cl, nrow=crow)
+                    if data.shape[2] != 4:
+                        raise RuntimeError("Data must be full correlation")
+                    data = data.reshape(crow, nchan, 2, 2)
 
-        if not args.sim:
-            logger.info("Storing corrected data into '{}'".format(args.storecolumn))
-            timepaunix = np.array(list(map(lambda x: x.replace(tzinfo=pytz.UTC).timestamp(), timepadt)))
-            nrowsput = 0
-            with tbl(ms_file, ack=False, readonly=False) as t:
-                if args.storecolumn not in t.colnames():
-                    logger.info(f"Inserting column {args.storecolumn}. Do not interrupt")
-                    add_column(t, args.storecolumn)
-                    logger.info(f"Inserted column {args.storecolumn}")
-                with taql("select * from $t where FIELD_ID=={} and DATA_DESC_ID=={}".format(f, args.ddid)) as tt:
-                    nrow = tt.nrows()
-                    nchunk = nrow // args.chunksize + int(nrow % args.chunksize > 0)
-                    for ci in range(nchunk):
-                        cl = ci * args.chunksize
-                        crow = min(nrow - ci * args.chunksize, args.chunksize)
-                        data = tt.getcol(args.rawcolumn, startrow=cl, nrow=crow)
-                        if data.shape[2] != 4:
-                            raise RuntimeError("Data must be full correlation")
-                        data = data.reshape(crow, nchan, 2, 2)
-
-                        def __casa_to_unixtime(t):
-                            dt = quantity("{}s".format(t)).to_unix_time()
-                            return dt
-                        mstimecentroid = tt.getcol("TIME", startrow=cl, nrow=crow)
-                        msuniqtime = np.unique(mstimecentroid)
-                        # expensive quanta operation -- do only for unique values
-                        uniqtimemsunix = np.array(list(map(__casa_to_unixtime, msuniqtime)))
-                        timemsunixindex = np.array(list(map(lambda t: np.argmin(np.abs(msuniqtime-t)),
+                    def __casa_to_unixtime(t):
+                        dt = quantity("{}s".format(t)).to_unix_time()
+                        return dt
+                    mstimecentroid = tt.getcol("TIME", startrow=cl, nrow=crow)
+                    msuniqtime = np.unique(mstimecentroid)
+                    # expensive quanta operation -- do only for unique values
+                    uniqtimemsunix = np.array(list(map(__casa_to_unixtime, msuniqtime)))
+                    timemsunixindex = np.array(list(map(lambda t: np.argmin(np.abs(msuniqtime-t)),
                                                             mstimecentroid)))
-                        timemsunix = uniqtimemsunix[timemsunixindex]
-                        a1 = tt.getcol("ANTENNA1", startrow=cl, nrow=crow)
-                        a2 = tt.getcol("ANTENNA2", startrow=cl, nrow=crow)
+                    timemsunix = uniqtimemsunix[timemsunixindex]
+                    a1 = tt.getcol("ANTENNA1", startrow=cl, nrow=crow)
+                    a2 = tt.getcol("ANTENNA2", startrow=cl, nrow=crow)
 
-                        def give_lin_Rmat(paA, nchan, conjugate=False):
-                            N = paA.shape[0] # nrow
-                            c = np.cos(paA).repeat(nchan)
-                            s = np.sin(paA).repeat(nchan)
-                            if conjugate:
-                                return np.array([c,s,-s,c]).T.reshape(N, nchan, 2, 2)
-                            else:
-                                return np.array([c,-s,s,c]).T.reshape(N, nchan, 2, 2)
-
-                        def give_crossphase_mat(phase, nrow, nchan, conjugate=False):
-                            ones = np.ones(nchan*nrow)
-                            zeros = np.zeros(nchan*nrow)
-                            e = np.exp((1.j if not conjugate else -1.j) * np.deg2rad(phase)) * ones
-                            return np.array([e,zeros,zeros,ones]).T.reshape(nrow, nchan, 2, 2)
-
-                        # need to apply anti-diagonal
-                        if args.flipfeeds:
-                            FVmat = np.array([np.zeros(nchan*crow),
-                                            np.ones(nchan*crow),
-                                            np.ones(nchan*crow),
-                                            np.zeros(nchan*crow)]).T.reshape(crow, nchan, 2, 2)
-                        else: # ignore step
-                            FVmat = np.array([np.ones(nchan*crow),
-                                            np.zeros(nchan*crow),
-                                            np.zeros(nchan*crow),
-                                            np.ones(nchan*crow)]).T.reshape(crow, nchan, 2, 2)
-                        # cojugate exp for left antenna
-                        XA1 = give_crossphase_mat(args.crossphase, nrow=crow, nchan=nchan,conjugate=True)
-                        XA2 = give_crossphase_mat(args.crossphase, nrow=crow, nchan=nchan,conjugate=False)
-
-                        if not args.noparang:
-                            # nearest neighbour interp to computed ParAng
-                            pamap = np.array(list(map(lambda x: np.argmin(np.abs(x - timepaunix)), timemsunix)))
-
-                            # apply receptor angles and get a PA to apply per row
-                            # assume same PA for all antennas, different F Jones per antenna possibly
-                            paA1 = pa[a1, pamap] + raarr[a1]
-                            paA2 = pa[a2, pamap] + raarr[a2]
-
-                            PA1 = give_lin_Rmat(paA1, nchan=nchan, conjugate=(args.invertpa))
-                            PA2 = give_lin_Rmat(paA2, nchan=nchan, conjugate=(not args.invertpa))
-                            JA1 = np.matmul(FVmat, np.matmul(PA1, XA1))
-                            JA2 = np.matmul(np.matmul(XA2, PA2), FVmat)
+                    def give_lin_Rmat(paA, nchan, conjugate=False):
+                        N = paA.shape[0] # nrow
+                        c = np.cos(paA).repeat(nchan)
+                        s = np.sin(paA).repeat(nchan)
+                        if conjugate:
+                            return np.array([c,s,-s,c]).T.reshape(N, nchan, 2, 2)
                         else:
-                            JA1 = np.matmul(FVmat, XA1)
-                            JA2 = np.matmul(XA2, FVmat)
+                            return np.array([c,-s,s,c]).T.reshape(N, nchan, 2, 2)
 
-                        corr_data = np.matmul(JA1, np.matmul(data, JA2)).reshape(crow, nchan, 4)
-                        tt.putcol(args.storecolumn, corr_data, startrow=cl, nrow=crow)
-                        logger.info("\tCorrected chunk {}/{}".format(ci+1, nchunk))
-                        nrowsput += crow
-                assert nrow == nrowsput
-        else:
-            logger.info("Simulating correction only -- no changes applied to data")
+                    def give_crossphase_mat(phase, nrow, nchan, conjugate=False):
+                        ones = np.ones(nchan*nrow)
+                        zeros = np.zeros(nchan*nrow)
+                        e = np.exp((1.j if not conjugate else -1.j) * np.deg2rad(phase)) * ones
+                        return np.array([e,zeros,zeros,ones]).T.reshape(nrow, nchan, 2, 2)
+
+                    # need to apply anti-diagonal
+
+                    FVmat = np.array([np.zeros(nchan*crow),
+                                        np.ones(nchan*crow),
+                                        np.ones(nchan*crow),
+                                        np.zeros(nchan*crow)]).T.reshape(crow, nchan, 2, 2)
+                    
+                    # cojugate exp for left antenna
+                    XA1 = give_crossphase_mat(0.0, nrow=crow, nchan=nchan,conjugate=True)
+                    XA2 = give_crossphase_mat(0.0, nrow=crow, nchan=nchan,conjugate=False)
+
+                    JA1 = np.matmul(FVmat, XA1)
+                    JA2 = np.matmul(XA2, FVmat)
+
+                    corr_data = np.matmul(JA1, np.matmul(data, JA2)).reshape(crow, nchan, 4)
+                    tt.putcol(storecolumn, corr_data, startrow=cl, nrow=crow)
+                    logger.info("\tCorrected chunk {}/{}".format(ci+1, nchunk))
+                    nrowsput += crow
+            assert nrow == nrowsput
 
 
+#----------------------------------------------------------------------------------
 def crosscal(logger, obs_id, cal_ms, path, fields=[2,2,0,1], ref_ant='m000'):
     import numpy as np
     import os,sys
-    from scripts import flag, xyamb_corr
+    from scripts import flag
     from casatasks import gaincal, setjy, bandpass, clearcal, polcal, flagmanager, applycal, flagdata, tclean
     from casatools import table
     """
@@ -688,7 +655,7 @@ def crosscal(logger, obs_id, cal_ms, path, fields=[2,2,0,1], ref_ant='m000'):
         gaintable = [ktab_pol, gtab_a2,btab2,ptab_df2], parang = False)
 
     #selfcal on polarisation calibrator
-    tclean(vis=calms,field=xcal,cell='0.5arcsec',imsize=512,niter=1000,imagename=path+'/output/pol_selfcal/'+obs+'_'+xcal+'-selfcal',weighting='briggs',robust=-0.2,datacolumn= 'corrected',deconvolver= 'mtmfs',\
+    tclean(vis=calms,field=xcal,cell='0.5arcsec',imsize=512,niter=1000,imagename=path+'/CAL_IMAGES/'+obs+'_'+xcal+'-selfcal',weighting='briggs',robust=-0.2,datacolumn= 'corrected',deconvolver= 'mtmfs',\
         nterms=2,specmode='mfs',interactive=False)
     gaincal(vis=calms,field=xcal, calmode='p', solint='30s',caltable=gtab_pol_p+'-selfcal',refantmode='strict',\
         refant=ref_ant,gaintype='G',gaintable = [ktab_pol, gtab_a2,btab2,ptab_df2], parang = False)
@@ -727,7 +694,7 @@ def crosscal(logger, obs_id, cal_ms, path, fields=[2,2,0,1], ref_ant='m000'):
     logger.info("")
     logger.info('crosscal: Correcting for phase ambiguity')
     #exec(open('/localwork/angelina/meerkat_virgo/ViMS/ViMS/scripts/xyamb_corr.py').read())
-    S=xyamb_corr.xyamb(logger, xytab=ptab_xf ,xyout=ptab_xfcorr)
+    S=xyamb(logger, xytab=ptab_xf ,xyout=ptab_xfcorr)
 
     os.system(f'ragavi-gains --table {ptab_xfcorr} --field 1 -o {path}/PLOTS/{obs}_Xfcal_ambcorr -p {path}/PLOTS/{obs}_Xfcal_ambcorr.png')
 

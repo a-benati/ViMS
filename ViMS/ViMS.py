@@ -9,7 +9,7 @@ log.delete_old_casa_logs()
 from scripts import flag, crosscal, im_polcal
 
 # List of observation IDs
-obs_ids = ["obs01"]
+obs_ids = ["obs26"]
 
 # Initialize Google Doc
 log.initialize_google_doc_once()
@@ -35,8 +35,9 @@ for obs_id in obs_ids:
     log.log_obs_header(logger, obs_id)
     log.log_obs_header_google_doc(obs_id)
 
-    # Split full msfile into calibrator ms file (returns it as a string)
-    cal_ms_file = cal_ms.split_cal(logger, obs_id)  
+    # Split full msfile into calibrator ms file (returns full path as a string)
+    #cal_ms_file = cal_ms.split_cal(logger, obs_id, output_dir)
+    cal_ms_file = '/localwork/angelina/meerkat_virgo/Obs26/msdir/obs26_1686670937_sdp_l0-cal.ms'  
     
     ##########################################################
     ########################## FLAG ##########################
@@ -51,7 +52,7 @@ for obs_id in obs_ids:
     ##########################################################
     ####################### POLCAL IM ########################
     ##########################################################
-    im_polcal.run(logger, obs_id)   
+    im_polcal.run(logger, obs_id, cal_ms_file, output_dir)   
     
     # Log the obs footer
     log.log_obs_footer(logger, obs_id)

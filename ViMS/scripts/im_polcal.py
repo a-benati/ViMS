@@ -2,19 +2,19 @@ import sys, os
 from utils import log
 import glob
 
-cal_ms = "/localwork/angelina/meerkat_virgo/Obs01_caldemo_2k/msdir/obs07_1k_demo-cal.ms"
+#cal_ms = "/localwork/angelina/meerkat_virgo/Obs01_caldemo_2k/msdir/obs07_1k_demo-cal.ms"
 
 ##############################Command definitions#####################################################
-def convolve_beam(obs_id, logger):
+def convolve_beam(obs_id, logger, path):
     import glob
     from lib_fits import AllImages
     """
     convolve the beam of all given images to a common size
     """
-    im_name = f'/lofar5/bbf4346/OUTPUT/{obs_id}/CAL_IMAGES/{obs_id}_cal_3c286'
+    im_name = f'{path}/CAL_IMAGES/{obs_id}_cal_3c286'
     images = glob.glob(im_name + '0*image.fits')
     if not images:
-        logger.error(f'Error in convolve_beam: No images found in /lofar5/bbf4346/OUTPUT/{obs_id}/CAL_IMAGES/')
+        logger.error(f'Error in convolve_beam: No images found in {path}/CAL_IMAGES/')
         return
     all_images = AllImages([imagefile for imagefile in images])
     all_images.convolve_to()
@@ -22,16 +22,16 @@ def convolve_beam(obs_id, logger):
 
 #---------------------------------------------------------------------------------------
 
-def make_cubes(logger, obs_id):
+def make_cubes(logger, obs_id, path):
     import glob
     from astropy.io import fits
     import numpy as np
     """
     create image cubes out of the produced images by wsclean for Stokes I, Q and U
     """
-    im_name = f'/lofar5/bbf4346/OUTPUT/{obs_id}/CAL_IMAGES/{obs_id}_cal_3c286-'
+    im_name = f'{path}/CAL_IMAGES/{obs_id}_cal_3c286-'
     MFS_I = im_name + 'MFS-I-image.fits'
-    cube_name = f'/lofar5/bbf4346/OUTPUT/{obs_id}/STOKES_CUBES/{obs_id}_3c286_'
+    cube_name = f'{path}/STOKES_CUBES/{obs_id}_3c286_'
     output_cube = cube_name + 'IQUV-'
     hdu_im = fits.open(MFS_I)[0]
     head = fits.open(MFS_I)[0].header
@@ -115,13 +115,13 @@ def make_cubes(logger, obs_id):
 
 #-------------------------------------------------------------------
 
-def stokesI_model(obs_id):
+def stokesI_model(obs_id, path):
     import numpy as np
     from astropy.io import fits
     """
     create a background subtracted stokes I image to use for the RM synthesis
     """
-    output_cube = f'/lofar5/bbf4346/OUTPUT/{obs_id}/STOKES_CUBES/{obs_id}_3c286_'
+    output_cube = f'{path}/STOKES_CUBES/{obs_id}_3c286_'
     hdul = fits.open(output_cube +'IQUV-I_cube.fits')
     data = hdul[0].data
     masked_data = np.empty_like(data)
@@ -141,14 +141,14 @@ def stokesI_model(obs_id):
 
 #-------------------------------------------------------------------
 
-def rm_synth_param(obs_id):
+def rm_synth_param(obs_id, path):
     import numpy as np
     import scipy.constants 
     """
     calculate RM synthesis parameters
     return values needed for rmsynth3d and final_rm_synth
     """
-    output_cube = f'/lofar5/bbf4346/OUTPUT/{obs_id}/STOKES_CUBES/{obs_id}_3c286_'
+    output_cube = f'{path}/STOKES_CUBES/{obs_id}_3c286_'
     freq_list = np.loadtxt(output_cube + 'IQUV-freq.txt')
     rms_list = np.loadtxt(output_cube + 'IQUV-rms.txt')
 
@@ -170,14 +170,14 @@ def rm_synth_param(obs_id):
 
 #-------------------------------------------------------------------
 
-def StokesI_MFS_noise(obs_id, logger):
+def StokesI_MFS_noise(obs_id, logger, path):
     import numpy as np
     from astropy.io import fits
     """
     calucate the noise of the Stokes I MFS image
     """
 
-    im_name = f'/lofar5/bbf4346/OUTPUT/{obs_id}/CAL_IMAGES/{obs_id}_cal_3c286-'
+    im_name = f'{path}/CAL_IMAGES/{obs_id}_cal_3c286-'
     MFS_I = im_name + 'MFS-I-image.fits'
     hdu_im = fits.open(MFS_I)[0]
 
@@ -196,7 +196,7 @@ def StokesI_MFS_noise(obs_id, logger):
 
 #-------------------------------------------------------------------
 
-def final_rm_synth(obs_id, sigma_p, d_phi, logger):
+def final_rm_synth(obs_id, sigma_p, d_phi, logger, path):
     from astropy.io import fits
     import numpy as np
     """calculate the polarisation angle, polarisation fraction and RM maps
@@ -205,11 +205,11 @@ def final_rm_synth(obs_id, sigma_p, d_phi, logger):
     GRM = 0.5 #Galactic RM in rad/m2, we consider it a constant value without error over the cluster
     thresh_p = 6. #threshold in sigma for sigma_p
     thresh_i = 5. #threshold in sigma for sigma_i
-    sigma_i = StokesI_MFS_noise(obs_id, logger)
+    sigma_i = StokesI_MFS_noise(obs_id, logger, path)
     RMSF_FWHM = d_phi #theoretical value from RMsynth param 
 
     # names of output images
-    name_out = f'/lofar5/bbf4346/OUTPUT/{obs_id}/STOKES_CUBES/{obs_id}_3c286-final'
+    name_out = f'{path}/STOKES_CUBES/{obs_id}_3c286-final'
     name_rm_cluster = name_out+'_RM.fits' #... name of RM image corrected for the Milky Way contribution
     name_err_rm_cluster = name_out+'_err_RM.fits' # name of error RM image
     name_p = name_out+'_P.fits' #... name of polarization image
@@ -217,10 +217,10 @@ def final_rm_synth(obs_id, sigma_p, d_phi, logger):
     name_polf = name_out+'_polf.fits' #... name of polarization fraction image
 
     # name of input images
-    name_tot = f'/lofar5/bbf4346/OUTPUT/{obs_id}/STOKES_CUBES/{obs_id}_3c286-FDF_tot_dirty.fits'
-    name_q = f'/lofar5/bbf4346/OUTPUT/{obs_id}/STOKES_CUBES/{obs_id}_3c286-FDF_real_dirty.fits'
-    name_u = f'/lofar5/bbf4346/OUTPUT/{obs_id}/STOKES_CUBES/{obs_id}_3c286-FDF_im_dirty.fits'
-    name_i = f'/lofar5/bbf4346/OUTPUT/{obs_id}/STOKES_CUBES/{obs_id}_3c286_IQUV-I_cube.fits'
+    name_tot = f'{path}/STOKES_CUBES/{obs_id}_3c286-FDF_tot_dirty.fits'
+    name_q = f'{path}/STOKES_CUBES/{obs_id}_3c286-FDF_real_dirty.fits'
+    name_u = f'{path}/STOKES_CUBES/{obs_id}_3c286-FDF_im_dirty.fits'
+    name_i = f'{path}/STOKES_CUBES/{obs_id}_3c286_IQUV-I_cube.fits'
 
     #open input images
 
@@ -309,7 +309,7 @@ def final_rm_synth(obs_id, sigma_p, d_phi, logger):
 
 #-------------------------------------------------------------------
 
-def create_region(obs_id, logger):
+def create_region(obs_id, logger, path):
     from astropy.wcs import WCS
     from astropy.io import fits
     from skimage.measure import find_contours
@@ -321,7 +321,7 @@ def create_region(obs_id, logger):
     of the MFS I image
     """
     #load image
-    MFS_I = f'/lofar5/bbf4346/OUTPUT/{obs_id}/CAL_IMAGES/{obs_id}_cal_3c286-MFS-I-image.fits'
+    MFS_I = f'{path}/CAL_IMAGES/{obs_id}_cal_3c286-MFS-I-image.fits'
     hdu_im = fits.open(MFS_I)[0]
     data = hdu_im.data.squeeze()
     header = hdu_im.header
@@ -329,7 +329,7 @@ def create_region(obs_id, logger):
     wcs = wcs_all.sub(['longitude', 'latitude'])
 
     #estimate background RMS
-    noise = StokesI_MFS_noise(obs_id, logger)
+    noise = StokesI_MFS_noise(obs_id, logger, path)
 
     #determine contour for central source
     contours = find_contours(data, 10*noise)
@@ -356,12 +356,12 @@ def create_region(obs_id, logger):
 
     region = PolygonSkyRegion(vertices=sky_coords)
     reg = Regions([region])
-    reg.write(f'/lofar5/bbf4346/OUTPUT/{obs_id}/STOKES_CUBE/{obs_id}_3c286_StokesI_region.reg', format='ds9', overwrite=True)
+    reg.write(f'{path}/STOKES_CUBE/{obs_id}_3c286_StokesI_region.reg', format='ds9', overwrite=True)
 
     #sanity check: plot image with region overlayed
     min = np.nanmin(data)
     max = np.nanmax(data)
-    out = f'/lofar5/bbf4346/OUTPUT/{obs_id}/PLOTS/{obs_id}_3c286_StokesI_region.png'
+    out = f'{path}/PLOTS/{obs_id}_3c286_StokesI_region.png'
 
     plt.figure(figsize=(8,8))
     plt.imshow(data, origin='lower', cmap='viridis', vmin=min, vmax=max)
@@ -375,7 +375,7 @@ def create_region(obs_id, logger):
 
 #-------------------------------------------------------------------
 
-def ionospheric_RM(obs_id, cal_ms):
+def ionospheric_RM(obs_id, cal_ms, path):
     import RMextract.getRM as gt
     import numpy as np
     from casatools import table
@@ -384,13 +384,13 @@ def ionospheric_RM(obs_id, cal_ms):
     for the specified observation
     """
     msdir = cal_ms
-    ionex_dir = f'/lofar5/bbf4346/OUTPUT/{obs_id}/IONEX_DATA/'
+    ionex_dir = f'{path}/IONEX_DATA/'
 
     pointing = [3.539257790414, 0.53248520675] #direction of 3C286
     field_id = 1
     ref_ant = 'm000'
 
-    tec = gt.getRM(MS=msdir, ionexPath=ionex_dir, server='ftp://gssc.esa.int/gnss/products/ionex/',earth_rot=0.5,ha_limit=1*np.pi, radec=pointing, prefix='UQRG', out_file=f'OUTPUT/{obs_id}/STOKES_CUBES/{obs_id}_3c286-ioncorr.txt')
+    tec = gt.getRM(MS=msdir, ionexPath=ionex_dir, server='ftp://gssc.esa.int/gnss/products/ionex/',earth_rot=0.5,ha_limit=1*np.pi, radec=pointing, prefix='UQRG', out_file=f'{path}/STOKES_CUBES/{obs_id}_3c286-ioncorr.txt')
     times_tot = np.squeeze(tec['times'])
     flags = tec['flags'][ref_ant]
     maskeddata=np.ma.array(tec['RM'][ref_ant],mask=np.logical_not(flags))
@@ -419,7 +419,7 @@ def ionospheric_RM(obs_id, cal_ms):
 
 #-------------------------------------------------------------------
 
-def plot_results(obs_id, logger, cal_ms):
+def plot_results(obs_id, logger, cal_ms, path):
     import numpy as np
     from astropy.io import fits
     from astropy.wcs import WCS
@@ -431,18 +431,18 @@ def plot_results(obs_id, logger, cal_ms):
     and caluclate the mean RM, polarisation angle and polarisation fraction for the source region 
     """
     #input images
-    name_p = f'/lofar5/bbf4346/OUTPUT/{obs_id}/STOKES_CUBES/{obs_id}_3c286-final_P.fits'
-    name_polf = f'/lofar5/bbf4346/OUTPUT/{obs_id}/STOKES_CUBES/{obs_id}_3c286-final_polf.fits'
-    name_pola = f'/lofar5/bbf4346/OUTPUT/{obs_id}/STOKES_CUBES/{obs_id}_3c286-final_pola.fits'
-    name_rm = f'/lofar5/bbf4346/OUTPUT/{obs_id}/STOKES_CUBES/{obs_id}_3c286-final_RM.fits'
-    name_err_rm = f'/lofar5/bbf4346/OUTPUT/{obs_id}/STOKES_CUBES/{obs_id}_3c286-final_err_RM.fits'
-    name_stokesI = f'/lofar5/bbf4346/OUTPUT/{obs_id}/CAL_IMAGES/{obs_id}_3c286-MFS-I-image.fits'
-    region = create_region(obs_id, logger)
+    name_p = f'{path}/STOKES_CUBES/{obs_id}_3c286-final_P.fits'
+    name_polf = f'{path}/STOKES_CUBES/{obs_id}_3c286-final_polf.fits'
+    name_pola = f'{path}/STOKES_CUBES/{obs_id}_3c286-final_pola.fits'
+    name_rm = f'{path}/STOKES_CUBES/{obs_id}_3c286-final_RM.fits'
+    name_err_rm = f'{path}/STOKES_CUBES/{obs_id}_3c286-final_err_RM.fits'
+    name_stokesI = f'{path}/CAL_IMAGES/{obs_id}_3c286-MFS-I-image.fits'
+    region = create_region(obs_id, logger, path)
 
     mean_freq = 1.14e9 #mean frequency in Hz
     cutout_size = (100, 100)
 
-    freq_list = np.loadtxt(f'/lofar5/bbf4346/OUTPUT/{obs_id}/STOKES_CUBES/{obs_id}_3c286-IQUV-freq.txt')
+    freq_list = np.loadtxt(f'{path}/STOKES_CUBES/{obs_id}_3c286-IQUV-freq.txt')
     hdu_I = fits.open(name_stokesI)
     header_i = hdu_I[0].header
     wcs_all = WCS(header_i)
@@ -502,7 +502,7 @@ def plot_results(obs_id, logger, cal_ms):
 
         #correct rotation measure value for ionospheric contribution
         if name == 'Rotation measure':
-            ionospheric_rm = ionospheric_RM(obs_id, cal_ms)
+            ionospheric_rm = ionospheric_RM(obs_id, cal_ms, path)
             weighted_mean_ioncorr = weighted_mean - ionospheric_rm
             mean_value_ioncorr = mean_value - ionospheric_rm
 
@@ -528,11 +528,12 @@ def plot_results(obs_id, logger, cal_ms):
             cbar = plt.colorbar(im, ax=ax, orientation='vertical', shrink=0.8)
  
 
-    plt.savefig(f'/lofar5/bbf4346/OUTPUT/{obs_id}/PLOTS/{obs_id}_3c286_RMsynth_param.png')
+    plt.savefig(f'{path}/PLOTS/{obs_id}_3c286_RMsynth_param.png')
+    return f'{path}/PLOTS/{obs_id}_3c286_RMsynth_param.png'
 
 #-------------------------------------------------------------------
 
-def plot_results_from_im(obs_id, logger):
+def plot_results_from_im(obs_id, logger, cal_ms, path):
     import numpy as np
     import glob
     from lib_fits import AllImages
@@ -592,7 +593,7 @@ def plot_results_from_im(obs_id, logger):
 
     
     #get all image files from wsclean
-    basename = f'/lofar5/bbf4346/OUTPUT/{obs_id}/CAL_IMAGES/{obs_id}_3c286-'
+    basename = f'{path}/CAL_IMAGES/{obs_id}_3c286-'
     stokesI_files = sorted(glob.glob(basename+'0*I-image--conv.fits'))
     stokesQ_files = sorted(glob.glob(basename+'0*Q-image--conv.fits'))
     stokesU_files = sorted(glob.glob(basename+'0*U-image--conv.fits'))
@@ -602,12 +603,12 @@ def plot_results_from_im(obs_id, logger):
     stokesU = AllImages(stokesU_files)
 
     #get freq and rms data
-    freq_list = np.loadtxt(f'/lofar5/bbf4346/OUTPUT/{obs_id}/STOKES_CUBES/{obs_id}_3c286-IQUV-freq.txt')
+    freq_list = np.loadtxt(f'{path}/STOKES_CUBES/{obs_id}_3c286-IQUV-freq.txt')
     freq_Ghz = np.array(freq_list)*1e-9 #convert to GHz
     c = 2.99792458e8
     wavelength_m = c/(freq_Ghz*1e9)
 
-    rms_list = np.loadtxt(f'/lofar5/bbf4346/OUTPUT/{obs_id}/STOKES_CUBES/{obs_id}_3c286-IQUV-rms.txt')
+    rms_list = np.loadtxt(f'{path}/STOKES_CUBES/{obs_id}_3c286-IQUV-rms.txt')
     rms_arr = np.array(rms_list)
 
     #get flux from all images
@@ -644,7 +645,7 @@ def plot_results_from_im(obs_id, logger):
 
     #get polf from rmsynth3d for comparision
 
-    hdu_polf = fits.open(f'/lofar5/bbf4346/OUTPUT/{obs_id}/STOKES_CUBES/{obs_id}_3c286-final_polf.fits')
+    hdu_polf = fits.open(f'{path}/STOKES_CUBES/{obs_id}_3c286-final_polf.fits')
     polf_data = np.array(hdu_polf[0].data.squeeze())
     header_polf = hdu_polf[0].header
     wcs_polf = WCS(header_polf, naxis=2)
@@ -659,12 +660,12 @@ def plot_results_from_im(obs_id, logger):
         weighted_mean = np.nansum(p[mask_weight_polf.astype(bool)]*weights_norm)
         polf_list.append(weighted_mean)
 
-    hdu_pol = fits.open(f'/lofar5/bbf4346/OUTPUT/{obs_id}/STOKES_CUBES/{obs_id}_3c286-final_P.fits')
+    hdu_pol = fits.open(f'{path}/STOKES_CUBES/{obs_id}_3c286-final_P.fits')
     pol = np.array(hdu_pol[0].data.squeeze())
     header_pol = hdu_pol[0].header
 
-    sky_region = create_region(obs_id, logger)
-    mean_rm = ionospheric_RM(obs_id, cal_ms)
+    sky_region = create_region(obs_id, logger, path)
+    mean_rm = ionospheric_RM(obs_id, cal_ms, path)
 
     #plot everything
     fig, axes = plt.subplots(1, 3, figsize=(30, 8))
@@ -691,10 +692,11 @@ def plot_results_from_im(obs_id, logger):
     axes[2].legend()
 
     plt.tight_layout()
-    plt.savefig(f'/lofar5/bbf4346/OUTPUT/{obs_id}/PLOTS/{obs_id}_3c286_RMsynth_param_from_im.png')
+    plt.savefig(f'{path}/PLOTS/{obs_id}_3c286_RMsynth_param_from_im.png')
+    return f'{path}/PLOTS/{obs_id}_3c286_RMsynth_param_from_im.png'
 #---------------------------------------------------------------------------
 
-def run(logger, obs_id):
+def run(logger, obs_id, cal_ms, path):
     """
     Image the polarisation calibrator via WSClean and determine the RM synthesis parameters
     of it with RMsynth3d for the given Observation ID.
@@ -714,20 +716,12 @@ def run(logger, obs_id):
         log.append_to_google_doc("######################################################", "", warnings="", plot_link="")
         log.append_to_google_doc("IMAGE POLCAL", "Started", warnings="", plot_link="")
 
-        """#load MS file
-        cal_ms = glob.glob(f'/lofar5/bbf4346/OUTPUT/{obs_id}/MS_FILES/{obs_id}_*cal.ms')
-        if len(cal_ms) == 0:
-            logger.error(f'Error in IMAGE POLCAL: No MS file found for {obs_id}')
-            raise ValueError(f'No MS file found for {obs_id}')
-        elif len(cal_ms) > 1:
-            logger.error(f'Error in IMAGE POLCAL: More than one MS file found for {obs_id}')
-            raise ValueError(f'More than one MS file found for {obs_id}')
-        """
+
         # image polarisation calibrator with Wsclean
         logger.info("\n\n\n\n\n")
         logger.info("IMAGE POLCAL: starting WSClean...")
 
-        im_name = f'/lofar5/bbf4346/OUTPUT/{obs_id}/CAL_IMAGES/{obs_id}_cal_3c286'
+        im_name = f'{path}/CAL_IMAGES/{obs_id}_cal_3c286'
 
         os.sys(f"wsclean -name {im_name} -size 2048 2048 -scale 1.3asec -mgain 0.8 -niter 30000 -auto-threshold 0.5 -auto-mask 2.5 \
                 -field 1 -pol iquv -weight briggs -0.5 -j 32 -abs-mem 100.0 -channels-out 15 -join-channels -gridder wgridder -no-update-model-required \
@@ -744,7 +738,7 @@ def run(logger, obs_id):
         # Comvolve beam to smallest common size
         logger.info("\n\n\n\n\n")
         logger.info("IMAGE POLCAL: convolving beam...")
-        convolve_beam(obs_id, logger)
+        convolve_beam(obs_id, logger, path)
         logger.info('IMAGE POLCAL: finished beam convolution')
         logger.info("")
         logger.info("")
@@ -754,7 +748,7 @@ def run(logger, obs_id):
         # create Image cubes and model of Stokes I image
         logger.info("\n\n\n\n\n")
         logger.info("IMAGE POLCAL: creating image cubes...")
-        make_cubes(logger, obs_id)
+        make_cubes(logger, obs_id, path)
         logger.info('IMAGE POLCAL: finished creating image cubes')
         logger.info("")
         logger.info("")
@@ -764,7 +758,7 @@ def run(logger, obs_id):
         #create background subtratced Stokes I image
         logger.info("\n\n\n\n\n")
         logger.info("IMAGE POLCAL: creating creating model Stokes I cube...")
-        stokesI_model(obs_id)
+        stokesI_model(obs_id, path)
         logger.info('IMAGE POLCAL: finished creating model Stokes I cube')
         logger.info("")
         logger.info("")
@@ -774,7 +768,7 @@ def run(logger, obs_id):
         #calculate RM synthesis parameters
         logger.info("\n\n\n\n\n")
         logger.info("IMAGE POLCAL: calculating RM synthesis parameters...")
-        d_phi, phi_max, W_far, sigma_p, sigma_RM = rm_synth_param(obs_id)
+        d_phi, phi_max, W_far, sigma_p, sigma_RM = rm_synth_param(obs_id, path)
         logger.info('IMAGE POLCAL: finished calculating RM synthesis parameters')
         logger.info("") 
         logger.info("")
@@ -784,8 +778,8 @@ def run(logger, obs_id):
         #run rmsynth3d
         logger.info("\n\n\n\n\n")
         logger.info("IMAGE POLCAL: running rmsynth3d...")
-        cube_name = f'/lofar5/bbf4346/OUTPUT/{obs_id}/STOKES_CUBES/{obs_id}_3c286_IQUV-'
-        rm_name = f'/lofar5/bbf4346/OUTPUT/{obs_id}/STOKES_CUBES/{obs_id}_3c286-'
+        cube_name = f'{path}/STOKES_CUBES/{obs_id}_3c286_IQUV-'
+        rm_name = f'{path}/STOKES_CUBES/{obs_id}_3c286-'
         os.sys(f'rmsynth3d {cube_name}Q_cube.fits {cube_name}U_cube.fits {cube_name}freq.txt -i {cube_name}I_masked.fits -v -l {phi_max} -s 30 -w "variance" -o {rm_name}')
         logger.info("IMAGE POLCAL: finished rmsynth3d")
         logger.info("")
@@ -796,7 +790,7 @@ def run(logger, obs_id):
         #create maps of polarisation angle, fraction and RM value for the polarisation calibrator
         logger.info("\n\n\n\n\n")
         logger.info("IMAGE POLCAL: running final RM synth...")
-        final_rm_synth(obs_id, sigma_p, d_phi, logger)
+        final_rm_synth(obs_id, sigma_p, d_phi, logger, path)
         logger.info('IMAGE POLCAL: finished final RM synth')
         logger.info("")
         logger.info("")
@@ -806,24 +800,35 @@ def run(logger, obs_id):
         #calculate the results for the source region and plot them as a png
         logger.info("\n\n\n\n\n")
         logger.info("IMAGE POLCAL: plotting results...")
-        plot_results(obs_id, logger)
+        plot = plot_results(obs_id, logger, cal_ms, path)
         logger.info('IMAGE POLCAL: finished plotting results')
         logger.info("")
         logger.info("")
         logger.info("")
         log.append_to_google_doc('IMAGE POLCAL', 'Finished plotting results', warnings="", plot_link="")
-        #log.upload_plot_to_drive(f'OUTPUT/{obs_id}/PLOTS/',f'{obs_id}_3c286_RMsynth_param.png')
-        #still need to add the finished plot the the google docs
+
+        plot_links = []
+        plot_links.append(log.upload_plot_to_drive(plot))
+        logger.info(plot_links)
+        for plot_link in plot_links:
+            log.append_to_google_doc("IMAGE POLCAL", "Plotted 3C286 with RM parameters", warnings="", plot_link=plot_link)
 
         #calculate RM values from image for comparision with RM values from RMsynth3d
         logger.info("\n\n\n\n\n")
         logger.info("IMAGE POLCAL: calculating RM values from image...")
-        plot_results_from_im(obs_id, logger)
+        plot_im = plot_results_from_im(obs_id, logger, cal_ms, path)
         logger.info('IMAGE POLCAL: finished calculating RM values from image')
         logger.info("")
         logger.info("")
         logger.info("")
         log.append_to_google_doc('IMAGE POLCAL', 'Finished calculating RM values from image', warnings="", plot_link="")
+
+        plot_links = []
+        plot_links.append(log.upload_plot_to_drive(plot_im))
+        logger.info(plot_links)
+        for plot_link in plot_links:
+            log.append_to_google_doc("IMAGE POLCAL", "Plotted 3C286 with RM parameters", warnings="", plot_link=plot_link)
+
         
         logger.info("image polcal step completed successfully!")
         logger.info("######################################################")
