@@ -1,6 +1,7 @@
 import sys, os
 from utils import log
 import glob
+import time
 
 #cal_ms = "/localwork/angelina/meerkat_virgo/Obs01_caldemo_2k/msdir/obs07_1k_demo-cal.ms"
 
@@ -11,7 +12,7 @@ def convolve_beam(obs_id, logger, path):
     """
     convolve the beam of all given images to a common size
     """
-    im_name = f'{path}/CAL_IMAGES/{obs_id}_cal_3c286'
+    im_name = f'{path}/CAL_IMAGES/{obs_id}_cal_3c286-'
     images = glob.glob(im_name + '0*image.fits')
     if not images:
         logger.error(f'Error in convolve_beam: No images found in {path}/CAL_IMAGES/')
@@ -57,7 +58,7 @@ def make_cubes(logger, obs_id, path):
                 logger.error('Error in make_cubes: Stokes U Image or I image not found ',i)
                 raise FileNotFoundError(f"Stokes U or I image not found for {i}")
             if (os.path.exists(i.replace('-Q-','-U-'))) and (os.path.exists(i.replace('-Q-','-I-'))):
-                logger.info('make_cubes: opening ',i)
+                logger.info(f'make_cubes: opening {i}')
                 hdu_q = fits.open(i)[0]
                 data_q = hdu_q.data.squeeze()
                 head_q = hdu_q.header
@@ -76,7 +77,7 @@ def make_cubes(logger, obs_id, path):
                     q_noise=np.sqrt(np.mean(data_rms_q*data_rms_q))
                     u_noise=np.sqrt(np.mean(data_rms_q*data_rms_q))
                     if 0.5*(u_noise+q_noise) <= 0.01:
-                        logger.info('make_cubes: noise q ',q_noise)
+                        logger.info(f'make_cubes: noise q: {q_noise}')
                         rms_q.append(q_noise)
                         img_q.append(data_q)
                         if 'CRVAL3' in head_q:
@@ -97,7 +98,7 @@ def make_cubes(logger, obs_id, path):
     array_u = np.array(img_u)
     array_i= np.array(img_i)
 
-    logger.info('make_cubes: writing Stokes cubes ',output_cube+'Q_cube.fits',output_cube+'U_cube.fits',output_cube+'I_cube.fits')
+    logger.info(f'make_cubes: writing Stokes cubes {output_cube}Q_cube.fits, {output_cube}U_cube.fits, {output_cube}I_cube.fits')
 
     fits.writeto(output_cube+'Q_cube.fits', array_q, header=head, overwrite=True)
     fits.writeto(output_cube+'U_cube.fits', array_u, header=head, overwrite=True)
@@ -106,12 +107,12 @@ def make_cubes(logger, obs_id, path):
     f_rms = open(output_cube+'rms.txt', 'w')
     np.savetxt(f_rms, rms_p)
     f_rms.close()
-    logger.info(' make_cube: Wriritng ',output_cube+'rms.txt')
+    logger.info(' make_cube: Writing {output_cube}rms.txt')
 
     f_freq= open(output_cube+'freq.txt', 'w')
     np.savetxt(f_freq, array_freq)
     f_freq.close()
-    logger.info('make_cube: writing ',output_cube+'freq.txt')
+    logger.info('make_cube: writing {output_cube}freq.txt')
 
 #-------------------------------------------------------------------
 
@@ -141,7 +142,7 @@ def stokesI_model(obs_id, path):
 
 #-------------------------------------------------------------------
 
-def rm_synth_param(obs_id, path):
+def rm_synth_param(obs_id, path, logger):
     import numpy as np
     import scipy.constants 
     """
@@ -165,6 +166,8 @@ def rm_synth_param(obs_id, path):
     # calculate theoretical noise
     sigma_p = 1. / np.sqrt(np.sum(1. / rms_list ** 2.))
     sigma_RM = (d_phi / 2.) / 8.  # HWHM/signal-to-noise
+
+    logger.info(f'RM synthesis parameters: W_far={W_far}, d_phi={d_phi}, phi_max={phi_max}, sigma_p={sigma_p}, sigma_RM={sigma_RM}')
 
     return d_phi, phi_max, W_far, sigma_p, sigma_RM
 
@@ -191,7 +194,7 @@ def StokesI_MFS_noise(obs_id, logger, path):
     else:
         logger.Error('Error in StokesI_MFS_noise: RMS calculation failed for Stokes I image')
         raise ValueError("RMS calculation failed for Stokes I image")
-
+    logger.info(f'StokesI_MFS_noise: calculated noise: {noise}')
     return noise
 
 #-------------------------------------------------------------------
@@ -280,7 +283,7 @@ def final_rm_synth(obs_id, sigma_p, d_phi, logger, path):
 
     # Compute polarization fraction map
     #img_polf = img_p / img_i
-    img_polf = np.divide(img_p, img_i, out=np.full_like(img_p, np.nan), where=img_i != 0)
+    img_polf = np.divide(img_p, img_i, out=np.full_like(img_i, np.nan), where=img_i != 0)
 
     #Write the results in a fits file. We first modify the header to set the right units for each image
 
@@ -348,6 +351,8 @@ def create_region(obs_id, logger, path):
     if best_contour is None:
         logger.error('Error in create_region: No contour found')
         raise ValueError("No contour found")
+    
+    logger.info(f'create_region: found contour with distance {best_distance} from center pixel')
 
     #convert to sky coordinates
     y_coords = best_contour[:, 0]
@@ -356,7 +361,8 @@ def create_region(obs_id, logger, path):
 
     region = PolygonSkyRegion(vertices=sky_coords)
     reg = Regions([region])
-    reg.write(f'{path}/STOKES_CUBE/{obs_id}_3c286_StokesI_region.reg', format='ds9', overwrite=True)
+    reg.write(f'{path}/STOKES_CUBES/{obs_id}_3c286_StokesI_region.reg', format='ds9', overwrite=True)
+    logger.info(f'create_region: created region file {path}/STOKES_CUBES/{obs_id}_3c286_StokesI_region.reg')
 
     #sanity check: plot image with region overlayed
     min = np.nanmin(data)
@@ -436,13 +442,13 @@ def plot_results(obs_id, logger, cal_ms, path):
     name_pola = f'{path}/STOKES_CUBES/{obs_id}_3c286-final_pola.fits'
     name_rm = f'{path}/STOKES_CUBES/{obs_id}_3c286-final_RM.fits'
     name_err_rm = f'{path}/STOKES_CUBES/{obs_id}_3c286-final_err_RM.fits'
-    name_stokesI = f'{path}/CAL_IMAGES/{obs_id}_3c286-MFS-I-image.fits'
+    name_stokesI = f'{path}/CAL_IMAGES/{obs_id}_cal_3c286-MFS-I-image.fits'
     region = create_region(obs_id, logger, path)
 
     mean_freq = 1.14e9 #mean frequency in Hz
     cutout_size = (100, 100)
 
-    freq_list = np.loadtxt(f'{path}/STOKES_CUBES/{obs_id}_3c286-IQUV-freq.txt')
+    freq_list = np.loadtxt(f'{path}/STOKES_CUBES/{obs_id}_3c286_IQUV-freq.txt')
     hdu_I = fits.open(name_stokesI)
     header_i = hdu_I[0].header
     wcs_all = WCS(header_i)
@@ -560,7 +566,7 @@ def plot_results_from_im(obs_id, logger, cal_ms, path):
             elif f < 1.7: #in GHz
                 result[i] = 29.53 + wavelength**2*(4005.88*np.log10(f)**3 - 39.38)
             else:
-                logger.error('Error in plot_results_form_im: MOdel only for frequencies below 12 GHz.')
+                logger.error('Error in plot_results_form_im: Model only for frequencies below 12 GHz.')
                 result[i] = np.nan
         return result
     
@@ -593,7 +599,7 @@ def plot_results_from_im(obs_id, logger, cal_ms, path):
 
     
     #get all image files from wsclean
-    basename = f'{path}/CAL_IMAGES/{obs_id}_3c286-'
+    basename = f'{path}/CAL_IMAGES/{obs_id}_cal_3c286-'
     stokesI_files = sorted(glob.glob(basename+'0*I-image--conv.fits'))
     stokesQ_files = sorted(glob.glob(basename+'0*Q-image--conv.fits'))
     stokesU_files = sorted(glob.glob(basename+'0*U-image--conv.fits'))
@@ -603,13 +609,16 @@ def plot_results_from_im(obs_id, logger, cal_ms, path):
     stokesU = AllImages(stokesU_files)
 
     #get freq and rms data
-    freq_list = np.loadtxt(f'{path}/STOKES_CUBES/{obs_id}_3c286-IQUV-freq.txt')
+    freq_list = np.loadtxt(f'{path}/STOKES_CUBES/{obs_id}_3c286_IQUV-freq.txt')
     freq_Ghz = np.array(freq_list)*1e-9 #convert to GHz
     c = 2.99792458e8
     wavelength_m = c/(freq_Ghz*1e9)
 
-    rms_list = np.loadtxt(f'{path}/STOKES_CUBES/{obs_id}_3c286-IQUV-rms.txt')
+    rms_list = np.loadtxt(f'{path}/STOKES_CUBES/{obs_id}_3c286_IQUV-rms.txt')
     rms_arr = np.array(rms_list)
+
+    sky_region = create_region(obs_id, logger, path)[0]
+    mean_rm = ionospheric_RM(obs_id, cal_ms, path)
 
     #get flux from all images
     I_flux = []
@@ -650,6 +659,10 @@ def plot_results_from_im(obs_id, logger, cal_ms, path):
     header_polf = hdu_polf[0].header
     wcs_polf = WCS(header_polf, naxis=2)
 
+    hdu_pol = fits.open(f'{path}/STOKES_CUBES/{obs_id}_3c286-final_P.fits')
+    pol = np.array(hdu_pol[0].data.squeeze())
+    header_pol = hdu_pol[0].header
+
     polf_list = []
     for p in polf_data:
         pix_region_polf = sky_region.to_pixel(wcs=wcs_polf)
@@ -660,12 +673,6 @@ def plot_results_from_im(obs_id, logger, cal_ms, path):
         weighted_mean = np.nansum(p[mask_weight_polf.astype(bool)]*weights_norm)
         polf_list.append(weighted_mean)
 
-    hdu_pol = fits.open(f'{path}/STOKES_CUBES/{obs_id}_3c286-final_P.fits')
-    pol = np.array(hdu_pol[0].data.squeeze())
-    header_pol = hdu_pol[0].header
-
-    sky_region = create_region(obs_id, logger, path)
-    mean_rm = ionospheric_RM(obs_id, cal_ms, path)
 
     #plot everything
     fig, axes = plt.subplots(1, 3, figsize=(30, 8))
@@ -711,10 +718,10 @@ def run(logger, obs_id, cal_ms, path):
     logger.info("")
 
     try:
-        log.append_to_google_doc("######################################################", "", warnings="", plot_link="")
-        log.append_to_google_doc("######################## IMAGE POLCAL ########################", "", warnings="", plot_link="")
-        log.append_to_google_doc("######################################################", "", warnings="", plot_link="")
-        log.append_to_google_doc("IMAGE POLCAL", "Started", warnings="", plot_link="")
+        #log.append_to_google_doc("######################################################", "", warnings="", plot_link="")
+        #log.append_to_google_doc("######################## IMAGE POLCAL ########################", "", warnings="", plot_link="")
+        #log.append_to_google_doc("######################################################", "", warnings="", plot_link="")
+        #log.append_to_google_doc("IMAGE POLCAL", "Started", warnings="", plot_link="")
 
 
         # image polarisation calibrator with Wsclean
@@ -723,7 +730,7 @@ def run(logger, obs_id, cal_ms, path):
 
         im_name = f'{path}/CAL_IMAGES/{obs_id}_cal_3c286'
 
-        os.sys(f"wsclean -name {im_name} -size 2048 2048 -scale 1.3asec -mgain 0.8 -niter 30000 -auto-threshold 0.5 -auto-mask 2.5 \
+        os.system(f"wsclean -name {im_name} -size 2048 2048 -scale 1.3asec -mgain 0.8 -niter 30000 -auto-threshold 0.5 -auto-mask 2.5 \
                 -field 1 -pol iquv -weight briggs -0.5 -j 32 -abs-mem 100.0 -channels-out 15 -join-channels -gridder wgridder -no-update-model-required \
                 -squared-channel-joining -join-polarizations -fit-spectral-pol 4 -multiscale  -multiscale-scales 0,2,3,6 -multiscale-scale-bias 0.75 \
                 -parallel-deconvolution 1000 -parallel-gridding 1 -channel-range 0 2296 -nwlayers-factor 3 -minuvw-m 40 -no-mf-weighting -weighting-rank-filter 3 \
@@ -733,7 +740,7 @@ def run(logger, obs_id, cal_ms, path):
         logger.info("")
         logger.info("")
         logger.info("")
-        log.append_to_google_doc('IMAGE POLCAL', 'Finished WSClean', warnings="", plot_link="")
+        #log.append_to_google_doc('IMAGE POLCAL', 'Finished WSClean', warnings="", plot_link="")
 
         # Comvolve beam to smallest common size
         logger.info("\n\n\n\n\n")
@@ -743,7 +750,7 @@ def run(logger, obs_id, cal_ms, path):
         logger.info("")
         logger.info("")
         logger.info("")
-        log.append_to_google_doc('IMAGE POLCAL', 'Finished beam convolution', warnings="", plot_link="")
+        #log.append_to_google_doc('IMAGE POLCAL', 'Finished beam convolution', warnings="", plot_link="")
 
         # create Image cubes and model of Stokes I image
         logger.info("\n\n\n\n\n")
@@ -753,7 +760,7 @@ def run(logger, obs_id, cal_ms, path):
         logger.info("")
         logger.info("")
         logger.info("")
-        log.append_to_google_doc('IMAGE POLCAL', 'Finished creating image cubes', warnings="", plot_link="")
+        #log.append_to_google_doc('IMAGE POLCAL', 'Finished creating image cubes', warnings="", plot_link="")
 
         #create background subtratced Stokes I image
         logger.info("\n\n\n\n\n")
@@ -763,29 +770,33 @@ def run(logger, obs_id, cal_ms, path):
         logger.info("")
         logger.info("")
         logger.info("")
-        log.append_to_google_doc('IMAGE POLCAL', 'Finished creating model Stokes I cube', warnings="", plot_link="")
+        #log.append_to_google_doc('IMAGE POLCAL', 'Finished creating model Stokes I cube', warnings="", plot_link="")
 
         #calculate RM synthesis parameters
         logger.info("\n\n\n\n\n")
         logger.info("IMAGE POLCAL: calculating RM synthesis parameters...")
-        d_phi, phi_max, W_far, sigma_p, sigma_RM = rm_synth_param(obs_id, path)
+        d_phi, phi_max, W_far, sigma_p, sigma_RM = rm_synth_param(obs_id, path, logger)
         logger.info('IMAGE POLCAL: finished calculating RM synthesis parameters')
         logger.info("") 
         logger.info("")
         logger.info("")
-        log.append_to_google_doc('IMAGE POLCAL', 'Finished calculating RMsynth paramters', warnings="", plot_link="")
+        #log.append_to_google_doc('IMAGE POLCAL', 'Finished calculating RMsynth paramters', warnings="", plot_link="")
         
         #run rmsynth3d
         logger.info("\n\n\n\n\n")
         logger.info("IMAGE POLCAL: running rmsynth3d...")
         cube_name = f'{path}/STOKES_CUBES/{obs_id}_3c286_IQUV-'
-        rm_name = f'{path}/STOKES_CUBES/{obs_id}_3c286-'
-        os.sys(f'rmsynth3d {cube_name}Q_cube.fits {cube_name}U_cube.fits {cube_name}freq.txt -i {cube_name}I_masked.fits -v -l {phi_max} -s 30 -w "variance" -o {rm_name}')
+        rm_name = f'{obs_id}_3c286-'
+        os.system('export PYTHONPATH=/opt/RM-Tools:$PYTHONPATH')
+        time.sleep(1)
+        command = f"python3 /opt/RM-Tools/RMtools_3D/do_RMsynth_3D.py {cube_name}Q_cube.fits {cube_name}U_cube.fits {cube_name}freq.txt -i {cube_name}I_masked.fits -n {cube_name}rms.txt -v -l {phi_max} -s 30 -w 'variance' -o {rm_name}"
+        logger.info(f"IMAGE POLCAL: Executing command: {command}")
+        os.system(command)
         logger.info("IMAGE POLCAL: finished rmsynth3d")
         logger.info("")
         logger.info("")
         logger.info("")
-        log.append_to_google_doc("IMAGE POLCAL", "Finished RMsynth3d", warnings="", plot_link="")
+        #log.append_to_google_doc("IMAGE POLCAL", "Finished RMsynth3d", warnings="", plot_link="")
 
         #create maps of polarisation angle, fraction and RM value for the polarisation calibrator
         logger.info("\n\n\n\n\n")
@@ -795,7 +806,7 @@ def run(logger, obs_id, cal_ms, path):
         logger.info("")
         logger.info("")
         logger.info("")
-        log.append_to_google_doc('IMAGE POLCAL', 'Finished final RM synth', warnings="", plot_link="")
+        #log.append_to_google_doc('IMAGE POLCAL', 'Finished final RM synth', warnings="", plot_link="")
 
         #calculate the results for the source region and plot them as a png
         logger.info("\n\n\n\n\n")
@@ -805,13 +816,13 @@ def run(logger, obs_id, cal_ms, path):
         logger.info("")
         logger.info("")
         logger.info("")
-        log.append_to_google_doc('IMAGE POLCAL', 'Finished plotting results', warnings="", plot_link="")
+        #log.append_to_google_doc('IMAGE POLCAL', 'Finished plotting results', warnings="", plot_link="")
 
-        plot_links = []
-        plot_links.append(log.upload_plot_to_drive(plot))
-        logger.info(plot_links)
-        for plot_link in plot_links:
-            log.append_to_google_doc("IMAGE POLCAL", "Plotted 3C286 with RM parameters", warnings="", plot_link=plot_link)
+        #plot_links = []
+        #plot_links.append(log.upload_plot_to_drive(plot))
+        #logger.info(plot_links)
+        #for plot_link in plot_links:
+            #log.append_to_google_doc("IMAGE POLCAL", "Plotted 3C286 with RM parameters", warnings="", plot_link=plot_link)
 
         #calculate RM values from image for comparision with RM values from RMsynth3d
         logger.info("\n\n\n\n\n")
@@ -821,13 +832,13 @@ def run(logger, obs_id, cal_ms, path):
         logger.info("")
         logger.info("")
         logger.info("")
-        log.append_to_google_doc('IMAGE POLCAL', 'Finished calculating RM values from image', warnings="", plot_link="")
+        #log.append_to_google_doc('IMAGE POLCAL', 'Finished calculating RM values from image', warnings="", plot_link="")
 
-        plot_links = []
-        plot_links.append(log.upload_plot_to_drive(plot_im))
-        logger.info(plot_links)
-        for plot_link in plot_links:
-            log.append_to_google_doc("IMAGE POLCAL", "Plotted 3C286 with RM parameters", warnings="", plot_link=plot_link)
+        #plot_links = []
+        #plot_links.append(log.upload_plot_to_drive(plot_im))
+        #logger.info(plot_links)
+        #for plot_link in plot_links:
+            #log.append_to_google_doc("IMAGE POLCAL", "Plotted 3C286 with RM parameters", warnings="", plot_link=plot_link)
 
         
         logger.info("image polcal step completed successfully!")
@@ -836,12 +847,12 @@ def run(logger, obs_id, cal_ms, path):
         logger.info("######################################################")
         logger.info("")
         logger.info("")
-        log.append_to_google_doc("Image polcal step completed successfully!", "", warnings="", plot_link="")
-        log.append_to_google_doc("######################################################", "", warnings="", plot_link="")
-        log.append_to_google_doc("###################### END IMAGE POLCAL ######################", "", warnings="", plot_link="")
-        log.append_to_google_doc("######################################################", "", warnings="", plot_link="")
-        log.append_to_google_doc("", "", warnings="", plot_link="")
-        log.append_to_google_doc("", "", warnings="", plot_link="")
+        #log.append_to_google_doc("Image polcal step completed successfully!", "", warnings="", plot_link="")
+        #log.append_to_google_doc("######################################################", "", warnings="", plot_link="")
+        #log.append_to_google_doc("###################### END IMAGE POLCAL ######################", "", warnings="", plot_link="")
+        #log.append_to_google_doc("######################################################", "", warnings="", plot_link="")
+        #log.append_to_google_doc("", "", warnings="", plot_link="")
+        #log.append_to_google_doc("", "", warnings="", plot_link="")
     except Exception as e:
         logger.error(f'Error in IMAGE POLCAL step: {str(e)}')
 

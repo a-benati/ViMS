@@ -12,7 +12,7 @@ from scripts import flag, crosscal, im_polcal
 obs_ids = ["obs26"]
 
 # Initialize Google Doc
-log.initialize_google_doc_once()
+#log.initialize_google_doc_once()
 
 for obs_id in obs_ids:
     
@@ -33,7 +33,7 @@ for obs_id in obs_ids:
 
     # Log the obs header
     log.log_obs_header(logger, obs_id)
-    log.log_obs_header_google_doc(obs_id)
+    #log.log_obs_header_google_doc(obs_id)
 
     # Split full msfile into calibrator ms file (returns full path as a string)
     #cal_ms_file = cal_ms.split_cal(logger, obs_id, output_dir)
@@ -42,12 +42,12 @@ for obs_id in obs_ids:
     ##########################################################
     ########################## FLAG ##########################
     ##########################################################
-    flag.run(logger, obs_id, cal_ms_file, output_dir)
+    #flag.run(logger, obs_id, cal_ms_file, output_dir)
 
     ##########################################################
     ######################## CROSSCAL ########################
     ##########################################################
-    crosscal.run(logger, obs_id, cal_ms_file, output_dir)
+    #crosscal.run(logger, obs_id, cal_ms_file, output_dir)
 
     ##########################################################
     ####################### POLCAL IM ########################
@@ -56,4 +56,4 @@ for obs_id in obs_ids:
     
     # Log the obs footer
     log.log_obs_footer(logger, obs_id)
-    log.log_obs_footer_google_doc(obs_id)
+    #log.log_obs_footer_google_doc(obs_id)

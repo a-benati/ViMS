@@ -153,7 +153,7 @@ def upload_plot_to_drive(plot_name):
     return response
 
 # Function to initialize the Google Doc (called once at pipeline start)
-def initialize_google_docs_once():
+def initialize_google_doc_once():
     """
     Initializes the Google Doc at the beginning of the pipeline.
     """
