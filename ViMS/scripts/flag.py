@@ -82,6 +82,13 @@ def append_flagsum_google_doc(summary):
                                  warnings="", plot_link="")
         log.append_to_google_doc("", "", warnings="", plot_link="")
 
+def get_flag_perc(summary):
+    if 'flagged' in summary and 'total' in summary:
+        flagged = summary['flagged']
+        total = summary['total']
+        perc = (flagged / total) * 100 if total > 0 else 0
+        return f"{perc:.1f}%"
+
 def run(logger, obs_id, cal_ms, path):
     logger.info("")
     logger.info("")
@@ -92,10 +99,13 @@ def run(logger, obs_id, cal_ms, path):
     logger.info("")
 
     try:
-        log.append_to_google_doc("######################################################", "", warnings="", plot_link="")
-        log.append_to_google_doc("######################## FLAG ########################", "", warnings="", plot_link="")
-        log.append_to_google_doc("######################################################", "", warnings="", plot_link="")
-        log.append_to_google_doc("FLAG", "Started", warnings="", plot_link="")
+        # log.append_to_google_doc("######################################################", "", warnings="", plot_link="")
+        # log.append_to_google_doc("######################## FLAG ########################", "", warnings="", plot_link="")
+        # log.append_to_google_doc("######################################################", "", warnings="", plot_link="")
+
+        summary = flagdata(vis=cal_ms, mode='summary')
+        logger.info(f"FLAG SUMMARY: {get_flag_perc(summary)}")
+        log.update_cell_in_google_doc(obs_id, 'Flag Perc', get_flag_perc(summary))
 
         # FLAGMANAGER FOR SAVING FLAGS
         logger.info("\n\n\n\n\n")
@@ -108,9 +118,8 @@ def run(logger, obs_id, cal_ms, path):
         logger.info("")
         logger.info("")
         logger.info("")
-        log.append_to_google_doc("FLAG", "Saved flags", warnings="", plot_link="")
 
-        # RESTORE FLAGS
+        # RESTOE FLAGS
         logger.info("\n\n\n\n\n")
         logger.info("FLAG: Restoring flags...")
         flagdata(vis=cal_ms,\
@@ -132,13 +141,11 @@ def run(logger, obs_id, cal_ms, path):
         logger.info("")
         logger.info("")
         logger.info("")
-        log.append_to_google_doc("FLAG", "Restored flags", warnings="", plot_link="")
 
         # PLOT MS WITHOUT FLAGS
         logger.info("\n\n\n\n\n")
         logger.info("FLAG: Plotting MS file without flags...")
         logger.info("-------------------------------------------------------------------------------------")
-        #plot_path = f"/a.benati/OUTPUT/{obs_id}/PLOTS/"
         plot_path = path + "/PLOTS/"
         plot_name = f"{obs_id}{{_field}}_before_flags.png"
         cmd = f'shadems -x FREQ -y amp --iter-field --dir "{plot_path}" --png "{plot_name}" {cal_ms}'
@@ -158,8 +165,7 @@ def run(logger, obs_id, cal_ms, path):
         logger.info("")
         logger.info("\n\n\n\n\n")
         logger.info(plot_links)
-        for plot_link in plot_links:
-            log.append_to_google_doc("FLAG", "Plotted MS file without flags", warnings="", plot_link=plot_link)
+        # log.update_cell_in_google_doc(obs_id, 'Crosshand', plot_links[0], is_image=True)
 
         # FLAG AUTOCORRELATIONS
         logger.info("\n\n\n\n\n")
@@ -183,7 +189,6 @@ def run(logger, obs_id, cal_ms, path):
         logger.info("")
         logger.info("")
         logger.info("")
-        log.append_to_google_doc("FLAG", "Flagged autocorrelations", warnings="", plot_link="")
 
         #FLAG SHADOWED ANTENNAS
         logger.info("\n\n\n\n\n")
@@ -207,7 +212,6 @@ def run(logger, obs_id, cal_ms, path):
         logger.info("")
         logger.info("")
         logger.info("")
-        log.append_to_google_doc("FLAG", "Flagged shadowed antennas", warnings="", plot_link="")
 
         #FLAG BAD CHANNELS
         logger.info("\n\n\n\n\n")
@@ -232,7 +236,6 @@ def run(logger, obs_id, cal_ms, path):
         logger.info("")
         logger.info("")
         logger.info("")
-        log.append_to_google_doc("FLAG", "Flagged bad channels", warnings="", plot_link="")
 
         #APPLY FLAG MASK (RFI MASKER)
         # stdout, stderr = utils.run_command(f"mask_ms.py --mask /ViMS/ViMS/utils/meerkat.rfimask.npy \
@@ -254,7 +257,6 @@ def run(logger, obs_id, cal_ms, path):
         logger.info("")
         logger.info("")
         logger.info("\n\n\n\n\n")
-        log.append_to_google_doc("FLAG", "Flagged with AOFlagger (Annalisa's strategy) 1st time", warnings="", plot_link="")
 
         logger.info("FLAG: Flagging with AOFlagger (Annalisa's strategy) 2nd time...")
         logger.info("-------------------------------------------------------------------------------------")
@@ -268,7 +270,6 @@ def run(logger, obs_id, cal_ms, path):
         logger.info("")
         logger.info("")
         logger.info("")
-        log.append_to_google_doc("FLAG", "Flagged with AOFlagger (Annalisa's strategy) 2nd time", warnings="", plot_link="")
 
         # FLAGMANAGER FOR SAVING FLAGS
         logger.info("\n\n\n\n\n")
@@ -281,7 +282,6 @@ def run(logger, obs_id, cal_ms, path):
         logger.info("")
         logger.info("")
         logger.info("")
-        log.append_to_google_doc("FLAG", "Saved flags", warnings="", plot_link="")
 
         #FLAG SUMMARY
         logger.info("\n\n\n\n\n")
@@ -289,7 +289,7 @@ def run(logger, obs_id, cal_ms, path):
         summary = flagdata(vis=cal_ms, mode='summary')
         log.redirect_casa_log(logger)
         log_flagsum(summary, logger)
-        append_flagsum_google_doc(summary)
+        log.update_cell_in_google_doc(obs_id, 'Flag perc', get_flag_perc(summary))
         logger.info("")
         logger.info("")
         logger.info("")
@@ -298,7 +298,6 @@ def run(logger, obs_id, cal_ms, path):
         logger.info("\n\n\n\n\n")
         logger.info("FLAG: Plotting MS file with all the flags...")
         logger.info("-------------------------------------------------------------------------------------")
-        #plot_path = f"/a.benati/OUTPUT/{obs_id}/PLOTS/"
         plot_path = path + "/PLOTS/"
         plot_name = f"{obs_id}{{_field}}_after_flags.png"
         stdout, stderr = utils.run_command(f"shadems -x FREQ -y amp --iter-field --dir {plot_path} \
@@ -317,7 +316,6 @@ def run(logger, obs_id, cal_ms, path):
         logger.info("")
         logger.info("")
         logger.info("\n\n\n\n\n")
-        log.append_to_google_doc("FLAG", "Plotted MS file with all the flags", warnings="", plot_link="")
 
         logger.info("Flag step completed successfully!")
         logger.info("######################################################")
@@ -325,11 +323,11 @@ def run(logger, obs_id, cal_ms, path):
         logger.info("######################################################")
         logger.info("")
         logger.info("")
-        log.append_to_google_doc("Flag step completed successfully!", "", warnings="", plot_link="")
-        log.append_to_google_doc("######################################################", "", warnings="", plot_link="")
-        log.append_to_google_doc("###################### END FLAG ######################", "", warnings="", plot_link="")
-        log.append_to_google_doc("######################################################", "", warnings="", plot_link="")
-        log.append_to_google_doc("", "", warnings="", plot_link="")
-        log.append_to_google_doc("", "", warnings="", plot_link="")
+        # log.append_to_google_doc("Flag step completed successfully!", "", warnings="", plot_link="")
+        # log.append_to_google_doc("######################################################", "", warnings="", plot_link="")
+        # log.append_to_google_doc("###################### END FLAG ######################", "", warnings="", plot_link="")
+        # log.append_to_google_doc("######################################################", "", warnings="", plot_link="")
+        # log.append_to_google_doc("", "", warnings="", plot_link="")
+        # log.append_to_google_doc("", "", warnings="", plot_link="")
     except Exception as e:
         logger.error(f"Error in FLAG step: {str(e)}")

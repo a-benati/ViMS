@@ -7,7 +7,7 @@ import subprocess
 import tempfile
 import contextlib
 from datetime import datetime
-from utils.client_script import append_log, initialize_google_doc, upload_plot
+from utils.client_script import append_log, initialize_google_docs, upload_plot, update_cell
 
 class Logger:
     """
@@ -132,7 +132,7 @@ def log_obs_footer(logger, obs_id):
     logger.info("")
 
 # Function to append updates to the Google Doc
-def append_to_google_doc(step_name, status, warnings=None, plot_link=None):
+def append_to_google_doc(step_name, status, warnings=None, plot_link=None, doc_name="ViMS Pipeline Log"):
     """
     Appends an update to the Google Doc by calling the Flask backend.
     """
@@ -140,7 +140,7 @@ def append_to_google_doc(step_name, status, warnings=None, plot_link=None):
         plot_link = ""
     if warnings is None:
         warnings = ""
-    response = append_log(step_name, status, warnings, plot_link)
+    response = append_log(step_name, status, warnings, plot_link, doc_name)
     print(f"Appended log response: {response}")
 
 # Function to upload a plot to Google Drive
@@ -157,10 +157,10 @@ def initialize_google_doc_once():
     """
     Initializes the Google Doc at the beginning of the pipeline.
     """
-    response = initialize_google_doc()
+    response = initialize_google_docs()
     print(f"Initialized doc response: {response}")
 
-def log_obs_header_google_doc(obs_id):
+def log_obs_header_google_doc(obs_id, doc_name="ViMS Pipeline Plots"):
     """
     Log the start of an observation's processing in the Google Doc.
 
@@ -170,13 +170,13 @@ def log_obs_header_google_doc(obs_id):
     obs_str = f"############# PROCESSING {obs_id.upper()} #############"
     border = "#" * len(obs_str)
 
-    append_to_google_doc("", "", warnings="", plot_link="")  # Empty line
-    append_to_google_doc(border, "", warnings="", plot_link="")
-    append_to_google_doc(obs_str, "", warnings="", plot_link="")
-    append_to_google_doc(border, "", warnings="", plot_link="")
-    append_to_google_doc("", "", warnings="", plot_link="")  # Empty line
+    append_to_google_doc("", "", warnings="", plot_link="", doc_name=doc_name)  # Empty line
+    append_to_google_doc(border, "", warnings="", plot_link="", doc_name=doc_name)
+    append_to_google_doc(obs_str, "", warnings="", plot_link="", doc_name=doc_name)
+    append_to_google_doc(border, "", warnings="", plot_link="", doc_name=doc_name)
+    append_to_google_doc("", "", warnings="", plot_link="", doc_name=doc_name)  # Empty line
 
-def log_obs_footer_google_doc(obs_id):
+def log_obs_footer_google_doc(obs_id, doc_name="ViMS Pipeline Plots"):
     """
     Log the end of an observation's processing in the Google Doc.
 
@@ -186,8 +186,19 @@ def log_obs_footer_google_doc(obs_id):
     obs_str = f"######## FINISHED PROCESSING {obs_id.upper()} ########"
     border = "#" * len(obs_str)
 
-    append_to_google_doc("", "", warnings="", plot_link="")  # Empty line
-    append_to_google_doc(border, "", warnings="", plot_link="")
-    append_to_google_doc(obs_str, "", warnings="", plot_link="")
-    append_to_google_doc(border, "", warnings="", plot_link="")
-    append_to_google_doc("", "", warnings="", plot_link="")  # Empty line
+    append_to_google_doc("", "", warnings="", plot_link="", doc_name=doc_name)  # Empty line
+    append_to_google_doc(border, "", warnings="", plot_link="", doc_name=doc_name)
+    append_to_google_doc(obs_str, "", warnings="", plot_link="", doc_name=doc_name)
+    append_to_google_doc(border, "", warnings="", plot_link="", doc_name=doc_name)
+    append_to_google_doc("", "", warnings="", plot_link="", doc_name=doc_name)  # Empty line
+
+def update_cell_in_google_doc(obs_id, column_name, content, is_image=False):
+    """
+    Update a specific cell in the Google Doc.
+
+    Parameters:
+        cell (str): The cell to update (e.g., "A1").
+        value (str): The value to set in the cell.
+    """
+    response = update_cell(obs_id, column_name, content, is_image)
+    print(f"Updated cell response: {response}")

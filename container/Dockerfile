@@ -188,7 +188,7 @@ RUN rm -rf /tmp/* && rm -rf /var/tmp/*
 ## Ragavi
 ####################################################################
 RUN python3.10 -m pip install "setuptools<69.0.0"
-RUN python3.10 -m pip install "bokeh<3.0.0"
+RUN python3.10 -m pip install "bokeh<3.0.0" && python3.10 -c "import bokeh; print(bokeh.__version__)" && sleep 15
 RUN python3.10 -m pip install ragavi
 
 ####################################################################
@@ -238,7 +238,9 @@ RUN python3 -m pip install RMExtract
 ####################################################################
 RUN python3.10 -m pip install dask_expr==1.1.16
 RUN python3.10 -m pip install dask==2023.12.1
-RUN python3.10 -m pip install shadems
+#RUN python3.10 -m pip install shadems
+RUN python3.10 -m pip install "bokeh<3.0.0" "shadems"
+RUN python3.10 -c "import bokeh; print(bokeh.__version__)" && sleep 15
 
 ####################################################################
 ## Ephem

@@ -17,6 +17,11 @@ def setup_output_dirs(obs_id):
     subdirs = ["LOGS", "CAL_TABLES", "PLOTS", "CAL_IMAGES", "MS_FILES", "STOKES_CUBES", "IONEX_DATA"]
 
     for subdir in subdirs:
-        os.makedirs(os.path.join(base_output_dir, subdir), exist_ok=True)
-
+        try:
+            path = os.path.join(base_output_dir, subdir)
+            os.makedirs(path, exist_ok=True)
+        except Exception as e:
+            print(f"Error creating {path}: {e}")
+            raise
+    
     return base_output_dir

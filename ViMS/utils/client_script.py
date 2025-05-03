@@ -2,13 +2,14 @@
 
 import requests
 
-def append_log(step_name, status, warnings="", plot_link=""):
+def append_log(step_name, status, warnings="", plot_link="", doc_name="ViMS Pipeline Log"):
     url = "http://34.173.57.167:5000/append_log"
     data = {
         "step_name": step_name,
         "status": status,
         "warnings": warnings,
-        "plot_link": plot_link
+        "plot_link": plot_link,
+        "doc_name": doc_name
     }
     response = requests.post(url, json=data)
     return response.json()
@@ -42,7 +43,18 @@ def setup_doc():
     response = requests.post(url)
     return response.json()
 
-def initialize_google_doc():
-    url = "http://34.173.57.167:5000/initialize_google_doc"
+def initialize_google_docs():
+    url = "http://34.173.57.167:5000/initialize_google_docs"
     response = requests.post(url)
+    return response.json()
+
+def create_table():
+    url = "http://34.173.57.167:5000/create_table"
+    response = requests.post(url)
+    return response.json()
+
+def update_cell(obs_id, column_name, content, is_image=False):
+    url = "http://34.173.57.167:5000/update_cell"
+    data = {"obs_id": obs_id, "column_name": column_name, "content": content, "is_image": is_image}
+    response = requests.post(url, json=data)
     return response.json()
