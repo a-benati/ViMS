@@ -166,7 +166,7 @@ RUN apt-get update && apt-get install -y --allow-downgrades \
 && pip install "protobuf<3.21" \
 && rm -rf /var/lib/apt/lists/*
 
-# Activate the virtual environment and install CASA modules
+# Install CASA modules
 RUN /bin/bash -c "pip3.10 install --upgrade pip wheel && \
     pip3.10 install casaconfig==1.0.2 casatools==6.7.0.31 casatasks==6.7.0.31 \
     casaplotms==2.6.2 casaviewer==2.3.2 casashell==6.7.0.31 \
@@ -187,9 +187,17 @@ RUN rm -rf /tmp/* && rm -rf /var/tmp/*
 ####################################################################
 ## Ragavi
 ####################################################################
-RUN python3.10 -m pip install "setuptools<69.0.0"
-RUN python3.10 -m pip install "bokeh<3.0.0" && python3.10 -c "import bokeh; print(bokeh.__version__)" && sleep 15
-RUN python3.10 -m pip install ragavi
+RUN apt update && \
+    apt install -y software-properties-common && \
+    add-apt-repository ppa:deadsnakes/ppa && \
+    apt update && \
+    apt install -y python3.8 python3.8-venv python3.8-distutils curl git build-essential && \
+    curl -sS https://bootstrap.pypa.io/pip/3.8/get-pip.py -o get-pip.py && \
+    python3.8 get-pip.py && \
+    python3.8 -m venv /opt/ragavi-env && \
+    /opt/ragavi-env/bin/pip install --upgrade pip && \
+    /opt/ragavi-env/bin/pip install "numpy==1.19.2" "setuptools<69.0.0" "bokeh<3.0.0" && \
+    /opt/ragavi-env/bin/pip install ragavi
 
 ####################################################################
 ## GUI INTERFACE
@@ -214,6 +222,7 @@ RUN python3.10 -m pip install radio-beam
 ####################################################################
 ## RM-Tools
 ####################################################################
+RUN python3.10 -m pip install "setuptools<69.0.0"
 RUN cd /opt && git clone https://github.com/CIRADA-Tools/RM-Tools.git
 RUN cd /opt/RM-Tools && python3.10 setup.py build install
 
