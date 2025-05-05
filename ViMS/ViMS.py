@@ -64,8 +64,9 @@ for obs_id in obs_ids:
     #log.log_obs_header_google_doc(obs_id, doc_name_plots)
 
     # Split full msfile into calibrator ms file (returns full path as a string)
-    #cal_ms_file = cal_ms.split_cal(logger, obs_id, output_dir)
-    cal_ms_file = '/localwork/angelina/meerkat_virgo/Obs26/msdir/obs26_1686670937_sdp_l0-cal.ms'  
+    # cal_ms_file = cal_ms.split_cal(logger, obs_id, output_dir)
+    # cal_ms_file = '/localwork/angelina/meerkat_virgo/Obs26/msdir/obs26_1686670937_sdp_l0-cal.ms'
+    cal_ms_file = "/a.benati/lw/victoria/tests/flag/obs01_1662797070_sdp_l0-cal_copy.ms"
     
     ##########################################################
     ########################## FLAG ##########################

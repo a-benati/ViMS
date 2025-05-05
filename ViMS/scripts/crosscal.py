@@ -450,8 +450,8 @@ def crosscal(logger, obs_id, cal_ms, path, fields=[2,2,0,1], ref_ant='m000'):
  
     applycal(vis=calms, field=bpcal, gaintable=[ktab,gtab_p,gtab_a,btab], applymode='calflag', flagbackup=False)
 
-    os.system(f'shadems {calms} -x CORRECTED_DATA:phase -y CORRECTED_DATA:amp -c CORR --corr XX,YY --field {bpcal} --dir {path}/PLOTS --png {obs}_{bpcal}_crosscal_XXYY.png')
-    os.system(f'shadems {calms} -x FREQ -y CORRECTED_DATA:amp -c CORR --corr XY,YX --field {bpcal} --dir {path}/PLOTS --png {obs}_{bpcal}_crosscal_XYYX.png')
+    os.system(f'/opt/shadems-env/bin/shadems {calms} -x CORRECTED_DATA:phase -y CORRECTED_DATA:amp -c CORR --corr XX,YY --field {bpcal} --dir {path}/PLOTS --png {obs}_{bpcal}_crosscal_XXYY.png')
+    os.system(f'/opt/shadems-env/bin/shadems {calms} -x FREQ -y CORRECTED_DATA:amp -c CORR --corr XY,YX --field {bpcal} --dir {path}/PLOTS --png {obs}_{bpcal}_crosscal_XYYX.png')
 
     #add flagging of Data and redoing crosscal on primary again
     flagdata(vis=calms, mode="rflag", field=bpcal, datacolumn="corrected", quackinterval=0.0, timecutoff=4.0, freqcutoff=3.0, extendpols=False, flagbackup=False, outfile="",overwrite=True, extendflags=False)
@@ -500,8 +500,8 @@ def crosscal(logger, obs_id, cal_ms, path, fields=[2,2,0,1], ref_ant='m000'):
     
     applycal(vis=calms, field=bpcal, gaintable=[ktab2,gtab_p2,gtab_a2,btab2], applymode='calflag', flagbackup=False)
 
-    os.system(f'shadems {calms} -x CORRECTED_DATA:phase -y CORRECTED_DATA:amp -c CORR --corr XX,YY --field {bpcal} --dir {path}/PLOTS --png {obs}_{bpcal}_crosscal_XXYY_flagged.png')
-    os.system(f'shadems {calms} -x FREQ -y CORRECTED_DATA:amp -c CORR --corr XY,YX --field {bpcal} --dir {path}/PLOTS --png {obs}_{bpcal}_crosscal_XYYX_flagged.png')
+    os.system(f'/opt/shadems-env/bin/shadems {calms} -x CORRECTED_DATA:phase -y CORRECTED_DATA:amp -c CORR --corr XX,YY --field {bpcal} --dir {path}/PLOTS --png {obs}_{bpcal}_crosscal_XXYY_flagged.png')
+    os.system(f'/opt/shadems-env/bin/shadems {calms} -x FREQ -y CORRECTED_DATA:amp -c CORR --corr XY,YX --field {bpcal} --dir {path}/PLOTS --png {obs}_{bpcal}_crosscal_XYYX_flagged.png')
 
     #####################################################################
     #Do two iterations of leakage calibration
@@ -581,13 +581,13 @@ def crosscal(logger, obs_id, cal_ms, path, fields=[2,2,0,1], ref_ant='m000'):
     flag.log_flagsum(df_cal_flag, logger)
 
     # Check that amplitude of leakage cal is gone down (few %) after calibration
-    os.system(f'shadems {calms} -x FREQ -y DATA:amp -c CORR --corr XY,YX --field {bpcal} --dir {path}/PLOTS --png {obs}_{bpcal}_Df-DATA.png')
-    os.system(f'shadems {calms} -x FREQ -y CORRECTED_DATA:amp -c CORR --corr XY,YX --field {bpcal} --dir {path}/PLOTS --png {obs}_{bpcal}_Df-CORRECTED.png')
-    os.system(f'shadems {calms} -x CORRECTED_DATA:phase -y CORRECTED_DATA:amp -c CORR --corr XX,YY --field {gcal} --dir {path}/PLOTS --png {obs}_{gcal}_crosscal_XXYY.png')
+    os.system(f'/opt/shadems-env/bin/shadems {calms} -x FREQ -y DATA:amp -c CORR --corr XY,YX --field {bpcal} --dir {path}/PLOTS --png {obs}_{bpcal}_Df-DATA.png')
+    os.system(f'/opt/shadems-env/bin/shadems {calms} -x FREQ -y CORRECTED_DATA:amp -c CORR --corr XY,YX --field {bpcal} --dir {path}/PLOTS --png {obs}_{bpcal}_Df-CORRECTED.png')
+    os.system(f'/opt/shadems-env/bin/shadems {calms} -x CORRECTED_DATA:phase -y CORRECTED_DATA:amp -c CORR --corr XX,YY --field {gcal} --dir {path}/PLOTS --png {obs}_{gcal}_crosscal_XXYY.png')
 
     logger.info("")
     logger.info("crosscal: Finished calibration of the primary calibrator")
-    log.append_to_google_doc(' CROSSCAL', 'Finished calibration of the primary', warnings="", plot_link="")
+    # log.append_to_google_doc(' CROSSCAL', 'Finished calibration of the primary', warnings="", plot_link="", doc_name="ViMS Pipeline Plots")
 
 
     #####################################################################################################
@@ -615,9 +615,9 @@ def crosscal(logger, obs_id, cal_ms, path, fields=[2,2,0,1], ref_ant='m000'):
     # Check calibration of secondary
     applycal(vis=calms, field=gcal, gaintable=[ktab_sec, gtab_sec_p,gtab_a2,btab2,Ttab_sec,ptab_df2], parang=False, flagbackup=False)
     os.system(f'ragavi-vis --ms {calms} -x frequency -y amplitude -dc CORRECTED tbin 12000 -ca antenna1 --corr XY,YX --field {gcal} -o {path}/PLOTS/{obs}_{gcal}-Df-CORRECTED.png')
-    os.system(f'shadems {calms} -x UV -y CORRECTED_DATA:amp -c ANTENNA1 --corr XX,YY --field {gcal} --dir {path}/PLOTS --png {obs}_{gcal}_amp_XXYY.png')
-    os.system(f'shadems {calms} -x UV -y CORRECTED_DATA:phase -c ANTENNA1 --corr XX,YY --field {gcal} --dir {path}/PLOTS --png {obs}_{gcal}_phase_XXYY.png')
-    os.system(f'shadems {calms} -x CORRECTED_DATA:phase -y CORRECTED_DATA:amp -c CORR --corr XX,YY  --field {gcal} --dir {path}/PLOTS --png {obs}_{gcal}_phaserefine_XXYY.png')
+    os.system(f'/opt/shadems-env/bin/shadems {calms} -x UV -y CORRECTED_DATA:amp -c ANTENNA1 --corr XX,YY --field {gcal} --dir {path}/PLOTS --png {obs}_{gcal}_amp_XXYY.png')
+    os.system(f'/opt/shadems-env/bin/shadems {calms} -x UV -y CORRECTED_DATA:phase -c ANTENNA1 --corr XX,YY --field {gcal} --dir {path}/PLOTS --png {obs}_{gcal}_phase_XXYY.png')
+    os.system(f'/opt/shadems-env/bin/shadems {calms} -x CORRECTED_DATA:phase -y CORRECTED_DATA:amp -c CORR --corr XX,YY  --field {gcal} --dir {path}/PLOTS --png {obs}_{gcal}_phaserefine_XXYY.png')
 
 
     #apply calibration up to  now to xcal: XY and YX will vary with time due to pang
@@ -631,12 +631,12 @@ def crosscal(logger, obs_id, cal_ms, path, fields=[2,2,0,1], ref_ant='m000'):
     flagmanager(vis=calms, mode='save', versionname=obs+'_flag_before_xf', merge='replace')
 
 
-    os.system(f'shadems {calms} -x CORRECTED_DATA:phase -y CORRECTED_DATA:amp -c CORR --corr XX,YY --field {xcal} --dir {path}/PLOTS --png {obs}_{xcal}_precalXf_XXYY.png')
-    os.system(f'shadems {calms} -x TIME -y CORRECTED_DATA:amp -c CORR --corr XY,YX --field {xcal} --dir {path}/PLOTS --png {obs}_{xcal}_precalXf_XYYX.png')
+    os.system(f'/opt/shadems-env/bin/shadems {calms} -x CORRECTED_DATA:phase -y CORRECTED_DATA:amp -c CORR --corr XX,YY --field {xcal} --dir {path}/PLOTS --png {obs}_{xcal}_precalXf_XXYY.png')
+    os.system(f'/opt/shadems-env/bin/shadems {calms} -x TIME -y CORRECTED_DATA:amp -c CORR --corr XY,YX --field {xcal} --dir {path}/PLOTS --png {obs}_{xcal}_precalXf_XYYX.png')
 
     logger.info("")
     logger.info("crosscal: Finished calibration of the secondary calibrator")
-    log.append_to_google_doc(' CROSSCAL', 'Finished calibration of the secondary', warnings="", plot_link="")
+    # log.append_to_google_doc(' CROSSCAL', 'Finished calibration of the secondary', warnings="", plot_link="", doc_name="ViMS Pipeline Plots")
 
     #############################################################################################################
     #calibration of the polarisation calibrator
@@ -670,8 +670,8 @@ def crosscal(logger, obs_id, cal_ms, path, fields=[2,2,0,1], ref_ant='m000'):
     #apply calibration up to  now, including phase refinement to xcal - crosshands should be real vaue dominated, imaginary will give idea of induced elliptcity. change in real axis due to parang
 
     applycal(vis=calms,field=xcal,gaintable=[ktab_pol, gtab_pol_p, gtab_a2, btab2, Ttab_sec, ptab_df2],parang=False, flagbackup=False)
-    os.system(f'shadems {calms} -x CORRECTED_DATA:phase -y CORRECTED_DATA:amp -c CORR --corr XX,YY --field {xcal} --dir {path}/PLOTS --png {obs}_{xcal}_precalXf_XXYY_refinephase.png')
-    os.system(f'shadems {calms} -x CORRECTED_DATA:imag -y CORRECTED_DATA:real -c CORR --corr XY,YX --field {xcal} --dir {path}/PLOTS --png {obs}_{xcal}_precalXf_XYYX_real_im.png')
+    os.system(f'/opt/shadems-env/bin/shadems {calms} -x CORRECTED_DATA:phase -y CORRECTED_DATA:amp -c CORR --corr XX,YY --field {xcal} --dir {path}/PLOTS --png {obs}_{xcal}_precalXf_XXYY_refinephase.png')
+    os.system(f'/opt/shadems-env/bin/shadems {calms} -x CORRECTED_DATA:imag -y CORRECTED_DATA:real -c CORR --corr XY,YX --field {xcal} --dir {path}/PLOTS --png {obs}_{xcal}_precalXf_XYYX_real_im.png')
 
 
     # Cross-hand delay calibration - 
@@ -700,7 +700,7 @@ def crosscal(logger, obs_id, cal_ms, path, fields=[2,2,0,1], ref_ant='m000'):
 
     logger.info("")
     logger.info("crosscal: Finished calibration of the polarisation calibrator")
-    log.append_to_google_doc(' CROSSCAL', 'Finished calibration of the polcal', warnings="", plot_link="")
+    # log.append_to_google_doc(' CROSSCAL', 'Finished calibration of the polcal', warnings="", plot_link="", doc_name="ViMS Pipeline Plots")
 
     applycal(vis=calms, field=xcal,gaintable=[ktab_pol, gtab_pol_p, kxtab, ptab_xfcorr, gtab_a2, btab2, Ttab_pol, ptab_df2],parang=True, flagbackup=False)
     applycal(vis=calms, field=gcal,gaintable=[ktab_sec, gtab_sec_p, kxtab, ptab_xfcorr, gtab_a2, btab2, Ttab_sec, ptab_df2], parang=True, flagbackup=False)
@@ -713,17 +713,15 @@ def crosscal(logger, obs_id, cal_ms, path, fields=[2,2,0,1], ref_ant='m000'):
 
     # Check: plot imaginary versis real and compare to previous plot
 
-    os.system(f'shadems {calms} -x CORRECTED_DATA:imag -y CORRECTED_DATA:real -c CORR --corr XY,YX --field {xcal} --dir {path}/PLOTS --png {obs}_{xcal}_aftercalXf_XYYX_real_im.png')
+    os.system(f'/opt/shadems-env/bin/shadems {calms} -x CORRECTED_DATA:imag -y CORRECTED_DATA:real -c CORR --corr XY,YX --field {xcal} --dir {path}/PLOTS --png {obs}_{xcal}_aftercalXf_XYYX_real_im.png')
     os.system(f'ragavi-vis --ms {calms} -x frequency -y phase -dc CORRECTED tbin 12000 -ca antenna1 --corr XY,YX --field {xcal} -o {path}/PLOTS/{obs}_{xcal}_aftercalXf_XYYX_phase.png')
 
 #------------------------------------------------------
 
 def run(logger, obs_id, cal_ms, path):
-    #cal_ms = "/a.benati/lw/victoria/tests/flag/obs01_1662797070_sdp_l0-cal_copy.ms"
-    log.append_to_google_doc("######################################################", "", warnings="", plot_link="")
-    log.append_to_google_doc("######################## CROSSCAL ########################", "", warnings="", plot_link="")
-    log.append_to_google_doc("######################################################", "", warnings="", plot_link="")
-    log.append_to_google_doc("CROSSCAL", "Started", warnings="", plot_link="")
+    # log.append_to_google_doc("######################################################", "", warnings="", plot_link="", doc_name="ViMS Pipeline Plots")
+    # log.append_to_google_doc("###################### CROSSCAL ######################", "", warnings="", plot_link="", doc_name="ViMS Pipeline Plots")
+    # log.append_to_google_doc("######################################################", "", warnings="", plot_link="", doc_name="ViMS Pipeline Plots")
     
     # swap feeds
     logger.info("\n\n\n\n\n")
@@ -733,15 +731,15 @@ def run(logger, obs_id, cal_ms, path):
     logger.info("")
     logger.info("")
     logger.info("")
-    log.append_to_google_doc('CROSSCAL', 'Finished Feedswap', warnings="", plot_link="")
     
     # do cross- and polarisation calibration
     logger.info("\n\n\n\n\n")
     logger.info("CROSSCAL: starting crosscalibration...")
     crosscal(logger, obs_id, cal_ms, path)
-    logger.info('CROSSCAL: finished crosscalibration')
+    logger.info("Crosscal step completed successfully!")
+    logger.info("######################################################")
+    logger.info("#################### END CROSSCAL ####################")
+    logger.info("######################################################")
     logger.info("")
     logger.info("")
-    logger.info("")
-    log.append_to_google_doc('CROSSCAL', 'Finished crosscalibration', warnings="", plot_link="")
     

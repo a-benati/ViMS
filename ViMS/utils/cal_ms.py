@@ -69,7 +69,7 @@ def split_targets(obs_id, logger, path):
     from casatasks import mstransform
     from casatools import msmetadata
     """
-    split data of the fields of the full ms-file into individula field ms-files
+    split data of the fields of the full ms-file into individual field ms-files
     """
     ms = glob.glob(f'{obs_id}_*l0.ms')
     full_ms = f'/lofar4/bba5268/meerkat_virgo/{ms}'

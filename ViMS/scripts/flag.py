@@ -4,8 +4,6 @@ import os, glob
 from utils import utils, log
 from casatasks import *
 
-#cal_ms = "/a.benati/lw/victoria/tests/flag/obs01_1662797070_sdp_l0-cal_copy.ms"
-
 def log_flagsum(summary, logger):
     """
     Prints a readable version of the flagging summary given.
@@ -41,47 +39,6 @@ def log_flagsum(summary, logger):
             perc = (flagged / total) * 100 if total > 0 else 0
             logger.info("   Field {}: {}/{} flagged ({:.2f}%)".format(field, flagged, total, perc))
 
-def append_flagsum_google_doc(summary):
-    """
-    Prints a readable version of the flagging summary given.
-    
-    Parameters:
-        summary: name of the summary dictionary created by flagdata
-        logger: logger instance of the pipeline
-    """
-    log.append_to_google_doc("FLAGGING SUMMARY", "", warnings="", plot_link="")
-    # 1. Total flagged summary
-    if 'flagged' in summary and 'total' in summary:
-        flagged = summary['flagged']
-        total = summary['total']
-        perc = (flagged / total) * 100 if total > 0 else 0
-        log.append_to_google_doc("", "Total flagged: {}/{} ({:.2f}%)".format(flagged, total, perc), \
-                                 warnings="", plot_link="")
-
-    # 2. Per correlation
-    if 'correlation' in summary:
-        log.append_to_google_doc("", "Flags per Correlation:", \
-                                 warnings="", plot_link="")
-        for corr, stats in summary['correlation'].items():
-            flagged = stats['flagged']
-            total = stats['total']
-            perc = (flagged / total) * 100 if total > 0 else 0
-            log.append_to_google_doc("", "   Correlation {}: {}/{} flagged ({:.2f}%)".format(corr, flagged, total, perc), \
-                                 warnings="", plot_link="")
-        log.append_to_google_doc("", "", warnings="", plot_link="")
-
-    # 3. Per field
-    if 'field' in summary:
-        log.append_to_google_doc("", "Flags per Field:", \
-                                 warnings="", plot_link="")
-        for field, stats in summary['field'].items():
-            flagged = stats['flagged']
-            total = stats['total']
-            perc = (flagged / total) * 100 if total > 0 else 0
-            log.append_to_google_doc("", "   Field {}: {}/{} flagged ({:.2f}%)".format(field, flagged, total, perc), \
-                                 warnings="", plot_link="")
-        log.append_to_google_doc("", "", warnings="", plot_link="")
-
 def get_flag_perc(summary):
     if 'flagged' in summary and 'total' in summary:
         flagged = summary['flagged']
@@ -98,16 +55,12 @@ def run(logger, obs_id, cal_ms, path):
     logger.info("")
     logger.info("")
 
+    # log.append_to_google_doc("######################################################", "", warnings="", plot_link="", doc_name="ViMS Pipeline Plots")
+    # log.append_to_google_doc("######################## FLAG ########################", "", warnings="", plot_link="", doc_name="ViMS Pipeline Plots")
+    # log.append_to_google_doc("######################################################", "", warnings="", plot_link="", doc_name="ViMS Pipeline Plots")
+
+    # FLAGMANAGER FOR SAVING FLAGS
     try:
-        # log.append_to_google_doc("######################################################", "", warnings="", plot_link="")
-        # log.append_to_google_doc("######################## FLAG ########################", "", warnings="", plot_link="")
-        # log.append_to_google_doc("######################################################", "", warnings="", plot_link="")
-
-        summary = flagdata(vis=cal_ms, mode='summary')
-        logger.info(f"FLAG SUMMARY: {get_flag_perc(summary)}")
-        log.update_cell_in_google_doc(obs_id, 'Flag Perc', get_flag_perc(summary))
-
-        # FLAGMANAGER FOR SAVING FLAGS
         logger.info("\n\n\n\n\n")
         logger.info("FLAG: Saving flags...")
         flagmanager(vis=cal_ms,\
@@ -118,8 +71,11 @@ def run(logger, obs_id, cal_ms, path):
         logger.info("")
         logger.info("")
         logger.info("")
+    except Exception as e:
+        logger.exception("Error while saving flags")
 
-        # RESTOE FLAGS
+    # RESTOE FLAGS
+    try:
         logger.info("\n\n\n\n\n")
         logger.info("FLAG: Restoring flags...")
         flagdata(vis=cal_ms,\
@@ -141,14 +97,17 @@ def run(logger, obs_id, cal_ms, path):
         logger.info("")
         logger.info("")
         logger.info("")
+    except Exception as e:
+        logger.exception("Error while restoring flags")
 
-        # PLOT MS WITHOUT FLAGS
+    # PLOT MS WITHOUT FLAGS
+    try:
         logger.info("\n\n\n\n\n")
         logger.info("FLAG: Plotting MS file without flags...")
         logger.info("-------------------------------------------------------------------------------------")
         plot_path = path + "/PLOTS/"
         plot_name = f"{obs_id}{{_field}}_before_flags.png"
-        cmd = f'shadems -x FREQ -y amp --iter-field --dir "{plot_path}" --png "{plot_name}" {cal_ms}'
+        cmd = f'/opt/shadems-env/bin/shadems -x FREQ -y amp --iter-field --dir "{plot_path}" --png "{plot_name}" {cal_ms}'
         stdout, stderr = utils.run_command(cmd)
         plot_pattern = os.path.join(plot_path, f"{obs_id}*_before_flags.png")
         plot_files = glob.glob(plot_pattern)
@@ -164,10 +123,11 @@ def run(logger, obs_id, cal_ms, path):
         logger.info("")
         logger.info("")
         logger.info("\n\n\n\n\n")
-        logger.info(plot_links)
-        # log.update_cell_in_google_doc(obs_id, 'Crosshand', plot_links[0], is_image=True)
+    except Exception as e:
+        logger.exception("Error while plotting MS file without flags")
 
-        # FLAG AUTOCORRELATIONS
+    # FLAG AUTOCORRELATIONS
+    try:
         logger.info("\n\n\n\n\n")
         logger.info("FLAG: Flagging autocorrelations...")
         flagdata(vis=cal_ms,\
@@ -189,8 +149,11 @@ def run(logger, obs_id, cal_ms, path):
         logger.info("")
         logger.info("")
         logger.info("")
+    except Exception as e:
+        logger.exception("Error while flagging autocorrelations")
 
-        #FLAG SHADOWED ANTENNAS
+    #FLAG SHADOWED ANTENNAS
+    try:
         logger.info("\n\n\n\n\n")
         logger.info("FLAG: Flagging shadowed antennas...")
         flagdata(vis=cal_ms,\
@@ -212,8 +175,11 @@ def run(logger, obs_id, cal_ms, path):
         logger.info("")
         logger.info("")
         logger.info("")
+    except Exception as e:
+        logger.exception("Error while flagging shadowed antennas")
 
-        #FLAG BAD CHANNELS
+    #FLAG BAD CHANNELS
+    try:
         logger.info("\n\n\n\n\n")
         logger.info("FLAG: Flagging bad channels...")
         flagdata(vis=cal_ms,\
@@ -236,13 +202,16 @@ def run(logger, obs_id, cal_ms, path):
         logger.info("")
         logger.info("")
         logger.info("")
+    except Exception as e:
+        logger.exception("Error while flagging bad channels")
 
-        #APPLY FLAG MASK (RFI MASKER)
-        # stdout, stderr = utils.run_command(f"mask_ms.py --mask /ViMS/ViMS/utils/meerkat.rfimask.npy \
-        #                                 --accumulation_mode or --memory 4096 --uvrange 0~1000\
-        #                                 {cal_ms}")
+    #APPLY FLAG MASK (RFI MASKER)
+    # stdout, stderr = utils.run_command(f"mask_ms.py --mask /ViMS/ViMS/utils/meerkat.rfimask.npy \
+    #                                 --accumulation_mode or --memory 4096 --uvrange 0~1000\
+    #                                 {cal_ms}")
 
-        #AOFLAGGER AUTO-FLAGGING
+    #AOFLAGGER AUTO-FLAGGING
+    try:
         logger.info("\n\n\n\n\n")
         logger.info("FLAG: Flagging with AOFlagger (Annalisa's strategy) 1st time...")
         logger.info("-------------------------------------------------------------------------------------")
@@ -257,7 +226,10 @@ def run(logger, obs_id, cal_ms, path):
         logger.info("")
         logger.info("")
         logger.info("\n\n\n\n\n")
+    except Exception as e:
+        logger.exception("Error while flagging with AOFlagger (Annalisa's strategy) 1st time")
 
+    try:
         logger.info("FLAG: Flagging with AOFlagger (Annalisa's strategy) 2nd time...")
         logger.info("-------------------------------------------------------------------------------------")
         stdout, stderr = utils.run_command(f"aoflagger -strategy /ViMS/ViMS/utils/default_thr2.lua\
@@ -270,8 +242,11 @@ def run(logger, obs_id, cal_ms, path):
         logger.info("")
         logger.info("")
         logger.info("")
+    except Exception as e:
+        logger.exception("Error while flagging with AOFlagger (Annalisa's strategy) 2nd time")
 
-        # FLAGMANAGER FOR SAVING FLAGS
+    # FLAGMANAGER FOR SAVING FLAGS
+    try:
         logger.info("\n\n\n\n\n")
         logger.info("FLAG: Saving flags...")
         flagmanager(vis=cal_ms,\
@@ -282,8 +257,11 @@ def run(logger, obs_id, cal_ms, path):
         logger.info("")
         logger.info("")
         logger.info("")
+    except Exception as e:
+        logger.exception("Error while saving flags")
 
-        #FLAG SUMMARY
+    #FLAG SUMMARY
+    try:
         logger.info("\n\n\n\n\n")
         logger.info("FLAG: Printing flagging summary...")
         summary = flagdata(vis=cal_ms, mode='summary')
@@ -293,14 +271,17 @@ def run(logger, obs_id, cal_ms, path):
         logger.info("")
         logger.info("")
         logger.info("")
+    except Exception as e:
+        logger.exception("Error while printing flagging summary")
 
-        # PLOT MS WITH ALL THE FLAGS
+    # PLOT MS WITH ALL THE FLAGS
+    try:
         logger.info("\n\n\n\n\n")
         logger.info("FLAG: Plotting MS file with all the flags...")
         logger.info("-------------------------------------------------------------------------------------")
         plot_path = path + "/PLOTS/"
         plot_name = f"{obs_id}{{_field}}_after_flags.png"
-        stdout, stderr = utils.run_command(f"shadems -x FREQ -y amp --iter-field --dir {plot_path} \
+        stdout, stderr = utils.run_command(f"/opt/shadems-env/bin/shadems -x FREQ -y amp --iter-field --dir {plot_path} \
                                            --png {plot_name} {cal_ms}")
         plot_pattern = os.path.join(plot_path, f"{obs_id}*_after_flags.png")
         plot_files = glob.glob(plot_pattern)
@@ -316,18 +297,18 @@ def run(logger, obs_id, cal_ms, path):
         logger.info("")
         logger.info("")
         logger.info("\n\n\n\n\n")
-
-        logger.info("Flag step completed successfully!")
-        logger.info("######################################################")
-        logger.info("###################### END FLAG ######################")
-        logger.info("######################################################")
-        logger.info("")
-        logger.info("")
-        # log.append_to_google_doc("Flag step completed successfully!", "", warnings="", plot_link="")
-        # log.append_to_google_doc("######################################################", "", warnings="", plot_link="")
-        # log.append_to_google_doc("###################### END FLAG ######################", "", warnings="", plot_link="")
-        # log.append_to_google_doc("######################################################", "", warnings="", plot_link="")
-        # log.append_to_google_doc("", "", warnings="", plot_link="")
-        # log.append_to_google_doc("", "", warnings="", plot_link="")
     except Exception as e:
-        logger.error(f"Error in FLAG step: {str(e)}")
+        logger.exception("Error while plotting MS file with all the flags")
+
+    logger.info("Flag step completed successfully!")
+    logger.info("######################################################")
+    logger.info("###################### END FLAG ######################")
+    logger.info("######################################################")
+    logger.info("")
+    logger.info("")
+    # log.append_to_google_doc("Flag step completed successfully!", "", warnings="", plot_link="", doc_name="ViMS Pipeline Plots")
+    # log.append_to_google_doc("######################################################", "", warnings="", plot_link="", doc_name="ViMS Pipeline Plots")
+    # log.append_to_google_doc("###################### END FLAG ######################", "", warnings="", plot_link="", doc_name="ViMS Pipeline Plots")
+    # log.append_to_google_doc("######################################################", "", warnings="", plot_link="", doc_name="ViMS Pipeline Plots")
+    # log.append_to_google_doc("", "", warnings="", plot_link="", doc_name="ViMS Pipeline Plots")
+    # log.append_to_google_doc("", "", warnings="", plot_link="", doc_name="ViMS Pipeline Plots")
