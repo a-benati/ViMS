@@ -724,22 +724,30 @@ def run(logger, obs_id, cal_ms, path):
     # log.append_to_google_doc("######################################################", "", warnings="", plot_link="", doc_name="ViMS Pipeline Plots")
     
     # swap feeds
-    logger.info("\n\n\n\n\n")
-    logger.info("CROSSCAL: starting Feedswap...")
-    correct_parang(logger, cal_ms, [0, 1, 2])
-    logger.info('CROSSCAL: finished Feedswap')
-    logger.info("")
-    logger.info("")
-    logger.info("")
+    try:
+        logger.info("\n\n\n\n\n")
+        logger.info("CROSSCAL: starting Feedswap...")
+        correct_parang(logger, cal_ms, [0, 1, 2])
+        logger.info('CROSSCAL: finished Feedswap')
+        logger.info("")
+        logger.info("")
+        logger.info("")
+    except Exception as e:
+        logger.exception("CROSSCAL: Feedswap failed")
     
     # do cross- and polarisation calibration
-    logger.info("\n\n\n\n\n")
-    logger.info("CROSSCAL: starting crosscalibration...")
-    crosscal(logger, obs_id, cal_ms, path)
-    logger.info("Crosscal step completed successfully!")
-    logger.info("######################################################")
-    logger.info("#################### END CROSSCAL ####################")
-    logger.info("######################################################")
-    logger.info("")
-    logger.info("")
+    try:
+        logger.info("\n\n\n\n\n")
+        logger.info("CROSSCAL: starting crosscalibration...")
+        crosscal(logger, obs_id, cal_ms, path)
+        logger.info("Crosscal step completed successfully!")
+        logger.info("")
+        logger.info("")
+        logger.info("######################################################")
+        logger.info("#################### END CROSSCAL ####################")
+        logger.info("######################################################")
+        logger.info("")
+        logger.info("")
+    except Exception as e:
+        logger.exception("CROSSCAL: crosscalibration failed")
     

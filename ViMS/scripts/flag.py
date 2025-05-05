@@ -267,7 +267,7 @@ def run(logger, obs_id, cal_ms, path):
         summary = flagdata(vis=cal_ms, mode='summary')
         log.redirect_casa_log(logger)
         log_flagsum(summary, logger)
-        log.update_cell_in_google_doc(obs_id, 'Flag perc', get_flag_perc(summary))
+        log.update_cell_in_google_doc(obs_id, 'Flag Perc', get_flag_perc(summary))
         logger.info("")
         logger.info("")
         logger.info("")
@@ -301,6 +301,8 @@ def run(logger, obs_id, cal_ms, path):
         logger.exception("Error while plotting MS file with all the flags")
 
     logger.info("Flag step completed successfully!")
+    logger.info("")
+    logger.info("")
     logger.info("######################################################")
     logger.info("###################### END FLAG ######################")
     logger.info("######################################################")

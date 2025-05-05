@@ -712,37 +712,44 @@ def run(logger, obs_id, cal_ms, path):
     logger.info("")
     logger.info("")
     logger.info("##########################################################")
-    logger.info("########################## IMAGE POLCAL ##########################")
+    logger.info("###################### IMAGE POLCAL ######################")
     logger.info("##########################################################")
     logger.info("")
     logger.info("")
 
+    #log.append_to_google_doc("######################################################", "", warnings="", plot_link="", doc_name="ViMS Pipeline Plots")
+    #log.append_to_google_doc("#################### IMAGE POLCAL ####################", "", warnings="", plot_link="", doc_name="ViMS Pipeline Plots")
+    #log.append_to_google_doc("######################################################", "", warnings="", plot_link="", doc_name="ViMS Pipeline Plots")
+    #log.append_to_google_doc("IMAGE POLCAL", "Started", warnings="", plot_link="")
+
+
+    # image polarisation calibrator with Wsclean
     try:
-        #log.append_to_google_doc("######################################################", "", warnings="", plot_link="")
-        #log.append_to_google_doc("######################## IMAGE POLCAL ########################", "", warnings="", plot_link="")
-        #log.append_to_google_doc("######################################################", "", warnings="", plot_link="")
-        #log.append_to_google_doc("IMAGE POLCAL", "Started", warnings="", plot_link="")
-
-
-        # image polarisation calibrator with Wsclean
         logger.info("\n\n\n\n\n")
         logger.info("IMAGE POLCAL: starting WSClean...")
 
         im_name = f'{path}/CAL_IMAGES/{obs_id}_cal_3c286'
 
-        os.system(f"wsclean -name {im_name} -size 2048 2048 -scale 1.3asec -mgain 0.8 -niter 30000 -auto-threshold 0.5 -auto-mask 2.5 \
+        cmd = f"wsclean -name {im_name} -size 2048 2048 -scale 1.3asec -mgain 0.8 -niter 30000 -auto-threshold 0.5 -auto-mask 2.5 \
                 -field 1 -pol iquv -weight briggs -0.5 -j 32 -abs-mem 100.0 -channels-out 15 -join-channels -gridder wgridder -no-update-model-required \
                 -squared-channel-joining -join-polarizations -fit-spectral-pol 4 -multiscale  -multiscale-scales 0,2,3,6 -multiscale-scale-bias 0.75 \
                 -parallel-deconvolution 1000 -parallel-gridding 1 -channel-range 0 2296 -nwlayers-factor 3 -minuvw-m 40 -no-mf-weighting -weighting-rank-filter 3 \
-                -data-column CORRECTED_DATA {cal_ms}")
+                -data-column CORRECTED_DATA {cal_ms}"
+        stdout, stderr = utils.run_command(cmd)
+        logger.info(stdout)
+        if stderr:
+            logger.error(f"Error in WSClean: {stderr}")
         
         logger.info('IMAGE POLCAL: finished WSClean')
         logger.info("")
         logger.info("")
         logger.info("")
-        #log.append_to_google_doc('IMAGE POLCAL', 'Finished WSClean', warnings="", plot_link="")
+        #log.append_to_google_doc('IMAGE POLCAL', 'Finished WSClean', warnings="", plot_link="", doc_name="ViMS Pipeline Plots")
+    except Exception as e:
+            logger.exception("Error while running WSClean")
 
-        # Comvolve beam to smallest common size
+    # Comvolve beam to smallest common size
+    try:
         logger.info("\n\n\n\n\n")
         logger.info("IMAGE POLCAL: convolving beam...")
         convolve_beam(obs_id, logger, path)
@@ -750,9 +757,12 @@ def run(logger, obs_id, cal_ms, path):
         logger.info("")
         logger.info("")
         logger.info("")
-        #log.append_to_google_doc('IMAGE POLCAL', 'Finished beam convolution', warnings="", plot_link="")
+        #log.append_to_google_doc('IMAGE POLCAL', 'Finished beam convolution', warnings="", plot_link="", doc_name="ViMS Pipeline Plots")
+    except Exception as e:
+        logger.exception("Error while convolving beam to smallest common size")
 
-        # create Image cubes and model of Stokes I image
+    # create Image cubes and model of Stokes I image
+    try:
         logger.info("\n\n\n\n\n")
         logger.info("IMAGE POLCAL: creating image cubes...")
         make_cubes(logger, obs_id, path)
@@ -760,9 +770,12 @@ def run(logger, obs_id, cal_ms, path):
         logger.info("")
         logger.info("")
         logger.info("")
-        #log.append_to_google_doc('IMAGE POLCAL', 'Finished creating image cubes', warnings="", plot_link="")
+        #log.append_to_google_doc('IMAGE POLCAL', 'Finished creating image cubes', warnings="", plot_link="", doc_name="ViMS Pipeline Plots")
+    except Exception as e:
+        logger.exception("Error while creating image cubes")
 
-        #create background subtratced Stokes I image
+    #create background subtratced Stokes I image
+    try:
         logger.info("\n\n\n\n\n")
         logger.info("IMAGE POLCAL: creating creating model Stokes I cube...")
         stokesI_model(obs_id, path)
@@ -770,9 +783,12 @@ def run(logger, obs_id, cal_ms, path):
         logger.info("")
         logger.info("")
         logger.info("")
-        #log.append_to_google_doc('IMAGE POLCAL', 'Finished creating model Stokes I cube', warnings="", plot_link="")
+        #log.append_to_google_doc('IMAGE POLCAL', 'Finished creating model Stokes I cube', warnings="", plot_link="", doc_name="ViMS Pipeline Plots")
+    except Exception as e:
+        logger.exception("Error while creating model Stokes I cube")
 
-        #calculate RM synthesis parameters
+    #calculate RM synthesis parameters
+    try:
         logger.info("\n\n\n\n\n")
         logger.info("IMAGE POLCAL: calculating RM synthesis parameters...")
         d_phi, phi_max, W_far, sigma_p, sigma_RM = rm_synth_param(obs_id, path, logger)
@@ -780,25 +796,34 @@ def run(logger, obs_id, cal_ms, path):
         logger.info("") 
         logger.info("")
         logger.info("")
-        #log.append_to_google_doc('IMAGE POLCAL', 'Finished calculating RMsynth paramters', warnings="", plot_link="")
+        #log.append_to_google_doc('IMAGE POLCAL', 'Finished calculating RMsynth paramters', warnings="", plot_link="", doc_name="ViMS Pipeline Plots")
+    except Exception as e:
+        logger.exception("Error while calculating RM synthesis parameters")
         
-        #run rmsynth3d
+    #run rmsynth3d
+    try:
         logger.info("\n\n\n\n\n")
         logger.info("IMAGE POLCAL: running rmsynth3d...")
         cube_name = f'{path}/STOKES_CUBES/{obs_id}_3c286_IQUV-'
         rm_name = f'{obs_id}_3c286-'
         os.system('export PYTHONPATH=/opt/RM-Tools:$PYTHONPATH')
         time.sleep(1)
-        command = f"python3 /opt/RM-Tools/RMtools_3D/do_RMsynth_3D.py {cube_name}Q_cube.fits {cube_name}U_cube.fits {cube_name}freq.txt -i {cube_name}I_masked.fits -n {cube_name}rms.txt -v -l {phi_max} -s 30 -w 'variance' -o {rm_name}"
-        logger.info(f"IMAGE POLCAL: Executing command: {command}")
-        os.system(command)
+        cmd = f"python3 /opt/RM-Tools/RMtools_3D/do_RMsynth_3D.py {cube_name}Q_cube.fits {cube_name}U_cube.fits {cube_name}freq.txt -i {cube_name}I_masked.fits -n {cube_name}rms.txt -v -l {phi_max} -s 30 -w 'variance' -o {rm_name}"
+        logger.info(f"IMAGE POLCAL: Executing command: {cmd}")
+        stdout, stderr = utils.run_command(cmd)
+        logger.info(stdout)
+        if stderr:
+            logger.error(f"Error in WSClean: {stderr}")
         logger.info("IMAGE POLCAL: finished rmsynth3d")
         logger.info("")
         logger.info("")
         logger.info("")
-        #log.append_to_google_doc("IMAGE POLCAL", "Finished RMsynth3d", warnings="", plot_link="")
+        #log.append_to_google_doc("IMAGE POLCAL", "Finished RMsynth3d", warnings="", plot_link="", doc_name="ViMS Pipeline Plots")
+    except Exception as e:
+        logger.exception("Error while running rmsynth3d")
 
-        #create maps of polarisation angle, fraction and RM value for the polarisation calibrator
+    #create maps of polarisation angle, fraction and RM value for the polarisation calibrator
+    try:
         logger.info("\n\n\n\n\n")
         logger.info("IMAGE POLCAL: running final RM synth...")
         final_rm_synth(obs_id, sigma_p, d_phi, logger, path)
@@ -806,9 +831,12 @@ def run(logger, obs_id, cal_ms, path):
         logger.info("")
         logger.info("")
         logger.info("")
-        #log.append_to_google_doc('IMAGE POLCAL', 'Finished final RM synth', warnings="", plot_link="")
+        #log.append_to_google_doc('IMAGE POLCAL', 'Finished final RM synth', warnings="", plot_link="", doc_name="ViMS Pipeline Plots")
+    except Exception as e:
+        logger.exception("Error while running final RM synth")
 
-        #calculate the results for the source region and plot them as a png
+    #calculate the results for the source region and plot them as a png
+    try:
         logger.info("\n\n\n\n\n")
         logger.info("IMAGE POLCAL: plotting results...")
         plot = plot_results(obs_id, logger, cal_ms, path)
@@ -816,15 +844,18 @@ def run(logger, obs_id, cal_ms, path):
         logger.info("")
         logger.info("")
         logger.info("")
-        #log.append_to_google_doc('IMAGE POLCAL', 'Finished plotting results', warnings="", plot_link="")
+        #log.append_to_google_doc('IMAGE POLCAL', 'Finished plotting results', warnings="", plot_link="", doc_name="ViMS Pipeline Plots")
+    except Exception as e:
+        logger.exception("Error while plotting results")
 
-        #plot_links = []
-        #plot_links.append(log.upload_plot_to_drive(plot))
-        #logger.info(plot_links)
-        #for plot_link in plot_links:
-            #log.append_to_google_doc("IMAGE POLCAL", "Plotted 3C286 with RM parameters", warnings="", plot_link=plot_link)
+    #plot_links = []
+    #plot_links.append(log.upload_plot_to_drive(plot))
+    #logger.info(plot_links)
+    #for plot_link in plot_links:
+        #log.append_to_google_doc("IMAGE POLCAL", "Plotted 3C286 with RM parameters", warnings="", plot_link=plot_link, doc_name="ViMS Pipeline Plots")
 
-        #calculate RM values from image for comparision with RM values from RMsynth3d
+    #calculate RM values from image for comparision with RM values from RMsynth3d
+    try:
         logger.info("\n\n\n\n\n")
         logger.info("IMAGE POLCAL: calculating RM values from image...")
         plot_im = plot_results_from_im(obs_id, logger, cal_ms, path)
@@ -832,28 +863,28 @@ def run(logger, obs_id, cal_ms, path):
         logger.info("")
         logger.info("")
         logger.info("")
-        #log.append_to_google_doc('IMAGE POLCAL', 'Finished calculating RM values from image', warnings="", plot_link="")
+        #log.append_to_google_doc('IMAGE POLCAL', 'Finished calculating RM values from image', warnings="", plot_link="", doc_name="ViMS Pipeline Plots")
+    except Exception as e:
+        logger.exception("Error while calculating RM values from image")
 
-        #plot_links = []
-        #plot_links.append(log.upload_plot_to_drive(plot_im))
-        #logger.info(plot_links)
-        #for plot_link in plot_links:
-            #log.append_to_google_doc("IMAGE POLCAL", "Plotted 3C286 with RM parameters", warnings="", plot_link=plot_link)
+    #plot_links = []
+    #plot_links.append(log.upload_plot_to_drive(plot_im))
+    #logger.info(plot_links)
+    #for plot_link in plot_links:
+        #log.append_to_google_doc("IMAGE POLCAL", "Plotted 3C286 with RM parameters", warnings="", plot_link=plot_link, doc_name="ViMS Pipeline Plots")
 
         
-        logger.info("image polcal step completed successfully!")
-        logger.info("######################################################")
-        logger.info("###################### END IMAGE POLCAL ######################")
-        logger.info("######################################################")
-        logger.info("")
-        logger.info("")
-        #log.append_to_google_doc("Image polcal step completed successfully!", "", warnings="", plot_link="")
-        #log.append_to_google_doc("######################################################", "", warnings="", plot_link="")
-        #log.append_to_google_doc("###################### END IMAGE POLCAL ######################", "", warnings="", plot_link="")
-        #log.append_to_google_doc("######################################################", "", warnings="", plot_link="")
-        #log.append_to_google_doc("", "", warnings="", plot_link="")
-        #log.append_to_google_doc("", "", warnings="", plot_link="")
-    except Exception as e:
-        logger.error(f'Error in IMAGE POLCAL step: {str(e)}')
+    logger.info("image polcal step completed successfully!")
+    logger.info("######################################################")
+    logger.info("################## END IMAGE POLCAL ##################")
+    logger.info("######################################################")
+    logger.info("")
+    logger.info("")
+    #log.append_to_google_doc("Image polcal step completed successfully!", "", warnings="", plot_link="", doc_name="ViMS Pipeline Plots")
+    #log.append_to_google_doc("######################################################", "", warnings="", plot_link="", doc_name="ViMS Pipeline Plots")
+    #log.append_to_google_doc("###################### END IMAGE POLCAL ######################", "", warnings="", plot_link="", doc_name="ViMS Pipeline Plots")
+    #log.append_to_google_doc("######################################################", "", warnings="", plot_link="", doc_name="ViMS Pipeline Plots")
+    #log.append_to_google_doc("", "", warnings="", plot_link="", doc_name="ViMS Pipeline Plots")
+    #log.append_to_google_doc("", "", warnings="", plot_link="", doc_name="ViMS Pipeline Plots")
 
 
