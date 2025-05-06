@@ -7,7 +7,7 @@ import argparse
 # Delete old CASA log files
 log.delete_old_casa_logs()
 
-from scripts import flag, crosscal, im_polcal
+from scripts import flag, crosscal, im_polcal, selfcal
 
 # List of observation IDs
 OBS_ALL = [f"obs{str(i).zfill(2)}" for i in range(1, 65)]
@@ -15,7 +15,7 @@ OBS_ALL = [f"obs{str(i).zfill(2)}" for i in range(1, 65)]
 parser = argparse.ArgumentParser(description="Victoria MeerKAT Survey (ViMS) pipeline.")
 parser.add_argument("--obs-id", nargs="+", help="List of observation IDs to run (e.g., obs01 obs02)")
 parser.add_argument("--start-from", type=str, help="Start from this observation ID and run all the following ones")
-parser.add_argument("--start-step", type=str, choices=["flag", "crosscal", "im_polcal"], default="flag",
+parser.add_argument("--start-step", type=str, choices=["flag", "crosscal", "im_polcal", "selfcal"], default="flag",
                     help="Pipeline step to start from (default: flag)")
 args = parser.parse_args()
 
@@ -32,7 +32,7 @@ else:
     obs_ids = OBS_ALL  # default: run all
 
 # Determine starting step
-steps = {"flag": 1, "crosscal": 2, "im_polcal": 3}
+steps = {"flag": 1, "crosscal": 2, "im_polcal": 3, "selfcal": 4}
 current_step = steps[args.start_step]
 
 # Initialize Google Doc
@@ -84,8 +84,14 @@ for obs_id in obs_ids:
     ####################### POLCAL IM ########################
     ##########################################################
     if current_step <= 3:
-        im_polcal.run(logger, obs_id)  
+        im_polcal.run(logger, obs_id, cal_ms_file, output_dir)
+
+    ##########################################################
+    ######################## SELFCAL #########################
+    ##########################################################
+    # if current_step <= 4:
+    #     selfcal.run(logger, obs_id, cal_ms_file, output_dir)
     
     # Log the obs footer
     log.log_obs_footer(logger, obs_id)
-    log.log_obs_footer_google_doc(obs_id, doc_name_plots)
+    # log.log_obs_footer_google_doc(obs_id, doc_name_plots)

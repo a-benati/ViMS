@@ -196,7 +196,7 @@ RUN apt update && \
     python3.8 get-pip.py && \
     python3.8 -m venv /opt/ragavi-env && \
     /opt/ragavi-env/bin/pip install --upgrade pip && \
-    /opt/ragavi-env/bin/pip install "numpy==1.19.2" "setuptools<69.0.0" "bokeh<3.0.0" && \
+    /opt/ragavi-env/bin/pip install "numpy==1.19.2" "setuptools<69.0.0" "bokeh<3.0.0" "codex-africanus==0.2.10" && \
     /opt/ragavi-env/bin/pip install ragavi
 
 ####################################################################
@@ -245,16 +245,19 @@ RUN python3 -m pip install RMExtract
 ####################################################################
 ## ShadeMS
 ####################################################################
-RUN python3.10 -m pip install dask_expr==1.1.16
-RUN python3.10 -m pip install dask==2023.12.1
-#RUN python3.10 -m pip install shadems
-RUN python3.10 -m pip install "bokeh<3.0.0" "shadems"
-RUN python3.10 -c "import bokeh; print(bokeh.__version__)" && sleep 15
+RUN python3.10 -m venv /opt/shadems-env 
+RUN /opt/shadems-env/bin/pip install shadems
 
 ####################################################################
 ## Ephem
 ####################################################################
 RUN python3.10 -m pip install ephem
+
+####################################################################
+## FACETSELFCAL
+####################################################################
+RUN python3.10 -m pip install joblib psutil
+RUN python3.10 -m pip install git+https://github.com/rvweeren/lofar_facet_selfcal.git
 
 #####################################################################
 
