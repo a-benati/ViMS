@@ -68,6 +68,11 @@ def split_cal(logger, obs_id, path):
                 nspw=1,interpolation="linear",phasecenter="",restfreq="",outframe="", veltype="radio",preaverage=False,timeaverage=False,timebin="",\
                 timespan="", maxuvwdistance=0.0,docallib=False,callib="",douvcontsub=False,fitspw="", fitorder=0,want_cont=False,denoising_lib=True,\
                 nthreads=1,niter=1, disableparallel=False,ddistart=-1,taql="",monolithic_processing=False,reindex=True)
+        
+        if os.path.exists(f"{path}/LOGS/feedswap.txt"):
+            os.remove("feedswap.txt")
+        else:
+            print("The file does not exist") 
     
         logger.info('Saved calibrator ms file succecsfully')
         return split_ms
@@ -130,5 +135,6 @@ def split_targets(obs_id, logger, path):
             logger.info(f'Size of the target file:{cal_size} MB. Space left in target path {path}; {space_left[2]}/{space_left[0]} MB')
     
     logger.info('Saved all target ms files successfully')
+    return targets
 
 

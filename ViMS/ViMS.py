@@ -7,7 +7,7 @@ import argparse
 # Delete old CASA log files
 log.delete_old_casa_logs()
 
-from scripts import flag, crosscal, im_polcal, selfcal
+from scripts import flag, crosscal, im_polcal, selfcal, flag_field
 
 # List of observation IDs
 OBS_ALL = [f"obs{str(i).zfill(2)}" for i in range(1, 65)]
@@ -15,7 +15,7 @@ OBS_ALL = [f"obs{str(i).zfill(2)}" for i in range(1, 65)]
 parser = argparse.ArgumentParser(description="Victoria MeerKAT Survey (ViMS) pipeline.")
 parser.add_argument("--obs-id", nargs="+", help="List of observation IDs to run (e.g., obs01 obs02)")
 parser.add_argument("--start-from", type=str, help="Start from this observation ID and run all the following ones")
-parser.add_argument("--start-step", type=str, choices=["flag", "crosscal", "im_polcal", "applycal", "selfcal"], default="flag",
+parser.add_argument("--start-step", type=str, choices=["flag", "crosscal", "im_polcal", "applycal", "flag_fields", "selfcal"], default="flag",
                     help="Pipeline step to start from (default: flag)")
 args = parser.parse_args()
 
@@ -32,7 +32,7 @@ else:
     obs_ids = OBS_ALL  # default: run all
 
 # Determine starting step
-steps = {"flag": 1, "crosscal": 2, "im_polcal": 3, "applycal": 4, "selfcal": 5}
+steps = {"flag": 1, "crosscal": 2, "im_polcal": 3, "applycal": 4, "flag_fields":5, "selfcal": 6}
 current_step = steps[args.start_step]
 
 # Initialize Google Doc
@@ -91,12 +91,18 @@ for obs_id in obs_ids:
     ##########################################################
     if current_step <= 4:
         # cal_ms.cal_lib(obs_id, logger, "J1939-6342", output_dir)
-        cal_ms.split_targets(obs_id, logger, output_dir)
+        targets = cal_ms.split_targets(obs_id, logger, output_dir)
+
+    ##########################################################
+    ###################### FLAG FIELDS #######################
+    ##########################################################
+    if current_step <= 5:
+        flag_field.run(logger, obs_id, targets, output_dir)
 
     ##########################################################
     ######################## SELFCAL #########################
     ##########################################################
-    # if current_step <= 5:
+    # if current_step <= 6:
     #     selfcal.run(logger, obs_id, cal_ms_file, output_dir)
     
     # Log the obs footer

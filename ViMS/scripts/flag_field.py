@@ -1,0 +1,295 @@
+#!/usr/bin/env python3
+
+import os, glob
+from utils import utils, log
+from casatasks import *
+
+def log_flagsum(summary, logger):
+    """
+    Prints a readable version of the flagging summary given.
+    
+    Parameters:
+        summary: name of the summary dictionary created by flagdata
+        logger: logger instance of the pipeline
+    """
+    
+    # 1. Total flagged summary
+    if 'flagged' in summary and 'total' in summary:
+        flagged = summary['flagged']
+        total = summary['total']
+        perc = (flagged / total) * 100 if total > 0 else 0
+        logger.info("Total flagged: {}/{} ({:.2f}%)".format(flagged, total, perc))
+
+    # 2. Per correlation
+    if 'correlation' in summary:
+        logger.info("Flags per Correlation:")
+        for corr, stats in summary['correlation'].items():
+            flagged = stats['flagged']
+            total = stats['total']
+            perc = (flagged / total) * 100 if total > 0 else 0
+            logger.info("   Correlation {}: {}/{} flagged ({:.2f}%)".format(corr, flagged, total, perc))
+        logger.info("")
+
+    # 3. Per field
+    if 'field' in summary:
+        logger.info("Flags per Field:")
+        for field, stats in summary['field'].items():
+            flagged = stats['flagged']
+            total = stats['total']
+            perc = (flagged / total) * 100 if total > 0 else 0
+            logger.info("   Field {}: {}/{} flagged ({:.2f}%)".format(field, flagged, total, perc))
+
+def get_flag_perc(summary):
+    if 'flagged' in summary and 'total' in summary:
+        flagged = summary['flagged']
+        total = summary['total']
+        perc = (flagged / total) * 100 if total > 0 else 0
+        return f"{perc:.1f}%"
+    
+def run(logger, obs_id, targets, path):
+    logger.info("")
+    logger.info("")
+    logger.info("##########################################################")
+    logger.info("########################## FLAG ##########################")
+    logger.info("##########################################################")
+    logger.info("")
+    logger.info("")
+
+    # FLAGMANAGER FOR SAVING FLAGS
+    for target in targets:
+        split_ms = glob.glob(f"{path}/MS_FILES/{obs_id}_*{target}*.ms")
+        logger.info(f"found {target} ms file: {split_ms}")
+    
+        try:
+            logger.info("\n\n\n\n\n")
+            logger.info("FLAG: Saving flags...")
+            flagmanager(vis=split_ms,\
+                            mode="save",versionname=f"{obs_id}_{target}_flag_before",oldname="",comment="",\
+                            merge="replace")
+            log.redirect_casa_log(logger)
+            logger.info("FLAG: Saved flags\n\n\n\n\n")
+            logger.info("")
+            logger.info("")
+            logger.info("")
+        except Exception as e:
+            logger.exception("Error while saving flags")
+
+    # RESTORE FLAGS
+        try:
+            logger.info("\n\n\n\n\n")
+            logger.info("FLAG: Restoring flags...")
+            flagdata(vis=split_ms,\
+                    mode="unflag",autocorr=True,inpfile="",reason="any",tbuff=0.0,\
+                    antenna="",uvrange="",timerange="",\
+                    correlation="",scan="",intent="",array="",observation="",feed="",clipminmax=[],\
+                    datacolumn="DATA",clipoutside=True,channelavg=False,chanbin=1,timeavg=False,timebin="0s",\
+                    clipzeros=False,quackinterval=0.0,quackmode="beg",quackincrement=False,tolerance=0.0,\
+                    addantenna="",lowerlimit=0.0,upperlimit=90.0,ntime="scan",combinescans=False,timecutoff=4.0,\
+                    freqcutoff=3.0,timefit="line",freqfit="poly",maxnpieces=7,flagdimension="freqtime",\
+                    usewindowstats="none",halfwin=1,extendflags=True,winsize=3,timedev="",freqdev="",\
+                    timedevscale=5.0,freqdevscale=5.0,spectralmax=1000000.0,spectralmin=0.0,antint_ref_antenna="",\
+                    minchanfrac=0.6,verbose=False,extendpols=True,growtime=50.0,growfreq=50.0,growaround=False,\
+                    flagneartime=False,flagnearfreq=False,minrel=0.0,maxrel=1.0,minabs=0,maxabs=-1,spwchan=False,\
+                    spwcorr=False,basecnt=False,fieldcnt=False,name="Summary",action="apply",display="",\
+                    flagbackup=False,savepars=False,cmdreason="",outfile="",overwrite=True,writeflags=True)
+            log.redirect_casa_log(logger)
+            logger.info("FLAG: Restored flags\n\n\n\n\n")
+            logger.info("")
+            logger.info("")
+            logger.info("")
+        except Exception as e:
+            logger.exception("Error while restoring flags")
+
+    # PLOT MS WITHOUT FLAGS
+        try:
+            logger.info("\n\n\n\n\n")
+            logger.info("FLAG: Plotting MS file without flags...")
+            logger.info("-------------------------------------------------------------------------------------")
+            plot_path = path + "/PLOTS/"
+            plot_name = f"{obs_id}_{target}_before_flags.png"
+            cmd = f'/opt/shadems-env/bin/shadems -x FREQ -y amp --iter-field --dir "{plot_path}" --png "{plot_name}" {split_ms}'
+            stdout, stderr = utils.run_command(cmd)
+            plot_pattern = os.path.join(plot_path, f"{obs_id}_{target}_before_flags.png")
+            plot_files = glob.glob(plot_pattern)
+            plot_links = []
+            for plot in plot_files:
+                plot_links.append(log.upload_plot_to_drive(plot))
+            logger.info(stdout)
+            if stderr:
+                logger.error(f"Error in ShadeMS: {stderr}")
+            logger.info("-------------------------------------------------------------------------------------")
+            logger.info("FLAG: Plotted MS file without flags\n\n\n\n\n")
+            logger.info("")
+            logger.info("")
+            logger.info("")
+            logger.info("\n\n\n\n\n")
+        except Exception as e:
+            logger.exception("Error while plotting MS file without flags")
+
+    # FLAG AUTOCORRELATIONS
+        try:
+            logger.info("\n\n\n\n\n")
+            logger.info("FLAG: Flagging autocorrelations...")
+            flagdata(vis=split_ms,\
+                    mode="manual",autocorr=True,inpfile="",reason="any",tbuff=0.0,\
+                    antenna="",uvrange="",timerange="",\
+                    correlation="",scan="",intent="",array="",observation="",feed="",clipminmax=[],\
+                    datacolumn="DATA",clipoutside=True,channelavg=False,chanbin=1,timeavg=False,timebin="0s",\
+                    clipzeros=False,quackinterval=0.0,quackmode="beg",quackincrement=False,tolerance=0.0,\
+                    addantenna="",lowerlimit=0.0,upperlimit=90.0,ntime="scan",combinescans=False,timecutoff=4.0,\
+                    freqcutoff=3.0,timefit="line",freqfit="poly",maxnpieces=7,flagdimension="freqtime",\
+                    usewindowstats="none",halfwin=1,extendflags=True,winsize=3,timedev="",freqdev="",\
+                    timedevscale=5.0,freqdevscale=5.0,spectralmax=1000000.0,spectralmin=0.0,antint_ref_antenna="",\
+                    minchanfrac=0.6,verbose=False,extendpols=True,growtime=50.0,growfreq=50.0,growaround=False,\
+                    flagneartime=False,flagnearfreq=False,minrel=0.0,maxrel=1.0,minabs=0,maxabs=-1,spwchan=False,\
+                    spwcorr=False,basecnt=False,fieldcnt=False,name="Summary",action="apply",display="",\
+                    flagbackup=False,savepars=False,cmdreason="",outfile="",overwrite=True,writeflags=True)
+            log.redirect_casa_log(logger)
+            logger.info("FLAG: Flagged autocorrelations\n\n\n\n\n")
+            logger.info("")
+            logger.info("")
+            logger.info("")
+        except Exception as e:
+            logger.exception("Error while flagging autocorrelations")
+
+    #FLAG SHADOWED ANTENNAS
+        try:
+            logger.info("\n\n\n\n\n")
+            logger.info("FLAG: Flagging shadowed antennas...")
+            flagdata(vis=split_ms,\
+                    mode="shadow",autocorr=False,inpfile="",reason="any",tbuff=0.0,spw="",\
+                    antenna="",uvrange="",timerange="",\
+                    correlation="",scan="",intent="",array="",observation="",feed="",clipminmax=[],\
+                    datacolumn="DATA",clipoutside=True,channelavg=False,chanbin=1,timeavg=False,timebin="0s",\
+                    clipzeros=False,quackinterval=0.0,quackmode="beg",quackincrement=False,tolerance=0.0,\
+                    addantenna="",lowerlimit=0.0,upperlimit=90.0,ntime="scan",combinescans=False,timecutoff=4.0,\
+                    freqcutoff=3.0,timefit="line",freqfit="poly",maxnpieces=7,flagdimension="freqtime",\
+                    usewindowstats="none",halfwin=1,extendflags=True,winsize=3,timedev="",freqdev="",\
+                    timedevscale=5.0,freqdevscale=5.0,spectralmax=1000000.0,spectralmin=0.0,antint_ref_antenna="",\
+                    minchanfrac=0.6,verbose=False,extendpols=True,growtime=50.0,growfreq=50.0,growaround=False,\
+                    flagneartime=False,flagnearfreq=False,minrel=0.0,maxrel=1.0,minabs=0,maxabs=-1,spwchan=False,\
+                    spwcorr=False,basecnt=False,fieldcnt=False,name="Summary",action="apply",display="",\
+                    flagbackup=False,savepars=False,cmdreason="",outfile="",overwrite=True,writeflags=True)
+            log.redirect_casa_log(logger)
+            logger.info("FLAG: Flagged shadowed antennas\n\n\n\n\n")
+            logger.info("")
+            logger.info("")
+            logger.info("")
+        except Exception as e:
+            logger.exception("Error while flagging shadowed antennas")
+
+    #FLAG BAD CHANNELS
+        try:
+            logger.info("\n\n\n\n\n")
+            logger.info("FLAG: Flagging bad channels...")
+            flagdata(vis=split_ms,\
+                    mode="manual",autocorr=False,inpfile="",reason="any",tbuff=0.0,\
+                    spw="*:856~880MHz ,*:1658~1800MHz,*:1419.8~1421.3MHz",\
+                    antenna="",uvrange="",timerange="",\
+                    correlation="",scan="",intent="",array="",observation="",feed="",clipminmax=[],\
+                    datacolumn="DATA",clipoutside=True,channelavg=False,chanbin=1,timeavg=False,timebin="0s",\
+                    clipzeros=False,quackinterval=0.0,quackmode="beg",quackincrement=False,tolerance=0.0,\
+                    addantenna="",lowerlimit=0.0,upperlimit=90.0,ntime="scan",combinescans=False,timecutoff=4.0,\
+                    freqcutoff=3.0,timefit="line",freqfit="poly",maxnpieces=7,flagdimension="freqtime",\
+                    usewindowstats="none",halfwin=1,extendflags=True,winsize=3,timedev="",freqdev="",timedevscale=5.0,\
+                    freqdevscale=5.0,spectralmax=1000000.0,spectralmin=0.0,antint_ref_antenna="",minchanfrac=0.6,\
+                    verbose=False,extendpols=True,growtime=50.0,growfreq=50.0,growaround=False,flagneartime=False,\
+                    flagnearfreq=False,minrel=0.0,maxrel=1.0,minabs=0,maxabs=-1,spwchan=False,spwcorr=False,\
+                    basecnt=False,fieldcnt=False,name="Summary",action="apply",display="",flagbackup=False,\
+                    savepars=False,cmdreason="",outfile="",overwrite=True,writeflags=True)
+            log.redirect_casa_log(logger)
+            logger.info("FLAG: Flagged bad channels\n\n\n\n\n")
+            logger.info("")
+            logger.info("")
+            logger.info("")
+        except Exception as e:
+            logger.exception("Error while flagging bad channels")
+
+    #APPLY FLAG MASK (RFI MASKER)
+        stdout, stderr = utils.run_command(f"mask_ms.py --mask /ViMS/ViMS/utils/meerkat.rfimask.npy \
+                                     --accumulation_mode or --memory 4096 --uvrange 0~1000\
+                                     {split_ms}")
+
+    #TRICOLOUR AUTO-FLAGGING
+        try:
+            logger.info("\n\n\n\n\n")
+            logger.info("FLAG: Flagging with Tricolour target fields...")
+            logger.info("-------------------------------------------------------------------------------------")
+            stdout, stderr = utils.run_command(f"tricolour --config /VIMS/VIMS/utils/mk_rfi_flagging_target_fields_firstpass.yaml\
+                                                --flagging-strategy polarisation --data-column DATA --field-names {target}\
+                                                --window-backend numpy {split_ms}")
+            logger.info(stdout)
+            if stderr:
+                logger.error(f"Error in Tricolour: {stderr}")
+            logger.info("-------------------------------------------------------------------------------------")
+            logger.info("FLAG: Flagged with Tricolour \n\n\n\n\n")
+            logger.info("")
+            logger.info("")
+            logger.info("")
+            logger.info("\n\n\n\n\n")
+        except Exception as e:
+            logger.exception("Error while flagging with Tricolour target fields")
+
+    # FLAGMANAGER FOR SAVING FLAGS
+        try:
+            logger.info("\n\n\n\n\n")
+            logger.info("FLAG: Saving flags...")
+            flagmanager(vis=split_ms,\
+                            mode="save",versionname=f"{obs_id}_{target}_flag_after",oldname="",comment="",\
+                            merge="replace")
+            log.redirect_casa_log(logger)
+            logger.info("FLAG: Saved flags\n\n\n\n\n")
+            logger.info("")
+            logger.info("")
+            logger.info("")
+        except Exception as e:
+            logger.exception("Error while saving flags")
+
+    #FLAG SUMMARY
+        try:
+            logger.info("\n\n\n\n\n")
+            logger.info("FLAG: Printing flagging summary...")
+            summary = flagdata(vis=split_ms, mode='summary')
+            log.redirect_casa_log(logger)
+            log_flagsum(summary, logger)
+            log.update_cell_in_google_doc(obs_id, 'Flag Perc', get_flag_perc(summary))
+            logger.info("")
+            logger.info("")
+            logger.info("")
+        except Exception as e:
+            logger.exception("Error while printing flagging summary")
+
+    # PLOT MS WITH ALL THE FLAGS
+        try:
+            logger.info("\n\n\n\n\n")
+            logger.info("FLAG: Plotting MS file with all the flags...")
+            logger.info("-------------------------------------------------------------------------------------")
+            plot_path = path + "/PLOTS/"
+            plot_name = f"{obs_id}_{target}_after_flags.png"
+            stdout, stderr = utils.run_command(f"/opt/shadems-env/bin/shadems -x FREQ -y amp --iter-field --dir {plot_path} \
+                                           --png {plot_name} {split_ms}")
+            plot_pattern = os.path.join(plot_path, f"{obs_id}_{target}*_after_flags.png")
+            plot_files = glob.glob(plot_pattern)
+            plot_links = []
+            for plot in plot_files:
+                plot_links.append(log.upload_plot_to_drive(plot))
+            logger.info(stdout)
+            if stderr:
+                logger.error(f"Error in ShadeMS: {stderr}")
+            logger.info("-------------------------------------------------------------------------------------")
+            logger.info("FLAG: Plotted MS file with all the flags\n\n\n\n\n")
+            logger.info("")
+            logger.info("")
+            logger.info("")
+            logger.info("\n\n\n\n\n")
+        except Exception as e:
+            logger.exception("Error while plotting MS file with all the flags")
+
+        logger.info(f"Flag step completed successfully for {target}!")
+    logger.info("")
+    logger.info("")
+    logger.info("######################################################")
+    logger.info("###################### END FLAG ######################")
+    logger.info("######################################################")
+    logger.info("")
+    logger.info("")

@@ -727,13 +727,19 @@ def run(logger, obs_id, cal_ms, path):
     
     # swap feeds
     try:
-        logger.info("\n\n\n\n\n")
-        logger.info("CROSSCAL: starting Feedswap...")
-        correct_parang(logger, cal_ms, [0, 1, 2])
-        logger.info('CROSSCAL: finished Feedswap')
-        logger.info("")
-        logger.info("")
-        logger.info("")
+        if os.path.exists(f"{path}/LOGS/feedswap.txt"):
+            logger.info("CROSSCAL: Feedswap already done, skipping...")
+        
+        else:
+            logger.info("\n\n\n\n\n")
+            logger.info("CROSSCAL: starting Feedswap...")
+            correct_parang(logger, cal_ms, [0, 1, 2])
+            logger.info('CROSSCAL: finished Feedswap')
+            with open(f"{path}/LOGS/feedswap.txt", "w") as file:
+                file.write(f"Feedswap for the ms file {cal_ms} was done!")
+            logger.info("")
+            logger.info("")
+            logger.info("")
     except Exception as e:
         logger.exception("CROSSCAL: Feedswap failed")
     
