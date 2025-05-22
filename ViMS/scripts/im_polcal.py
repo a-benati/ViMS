@@ -426,7 +426,7 @@ def ionospheric_RM(obs_id, cal_ms, path):
 
 #-------------------------------------------------------------------
 
-def plot_results(obs_id, logger, cal_ms, path):
+def plot_results(obs_id, logger, path):
     import numpy as np
     from astropy.io import fits
     from astropy.wcs import WCS
@@ -509,9 +509,9 @@ def plot_results(obs_id, logger, cal_ms, path):
 
         #correct rotation measure value for ionospheric contribution
         if name == 'Rotation measure':
-            ionospheric_rm = ionospheric_RM(obs_id, cal_ms, path)
-            weighted_mean_ioncorr = weighted_mean - ionospheric_rm
-            mean_value_ioncorr = mean_value - ionospheric_rm
+            #ionospheric_rm = ionospheric_RM(obs_id, cal_ms, path)
+            #weighted_mean_ioncorr = weighted_mean - ionospheric_rm
+            #mean_value_ioncorr = mean_value - ionospheric_rm
 
             im = ax.imshow(i, origin='lower', cmap='viridis', interpolation='none', vmin=min, vmax=max)
             ax.set_xlabel('RA')
@@ -519,8 +519,8 @@ def plot_results(obs_id, logger, cal_ms, path):
             ax.set_title(name)
 
             cutout_regions[0].plot(ax=ax, lw=2)
-            ax.text(0.5, 0.9, f" weighted mean: {weighted_mean_ioncorr:.3f}", color='black', fontsize=10, transform=ax.transAxes, bbox=dict(facecolor='white'))
-            ax.text(0.05, 0.9, f"Mean: {mean_value_ioncorr:.3f}", color='black', fontsize=10, transform=ax.transAxes, bbox=dict(facecolor='white', alpha=0.7))
+            ax.text(0.5, 0.9, f" weighted mean: {weighted_mean:.3f}", color='black', fontsize=10, transform=ax.transAxes, bbox=dict(facecolor='white'))
+            ax.text(0.05, 0.9, f"Mean: {mean_value:.3f}", color='black', fontsize=10, transform=ax.transAxes, bbox=dict(facecolor='white', alpha=0.7))
             cbar = plt.colorbar(im, ax=ax, orientation='vertical', shrink=0.8)
 
         else:
@@ -540,7 +540,7 @@ def plot_results(obs_id, logger, cal_ms, path):
 
 #-------------------------------------------------------------------
 
-def plot_results_from_im(obs_id, logger, cal_ms, path):
+def plot_results_from_im(obs_id, logger, path):
     import numpy as np
     import glob
     from lib_fits import AllImages
@@ -619,7 +619,7 @@ def plot_results_from_im(obs_id, logger, cal_ms, path):
     rms_arr = np.array(rms_list)
 
     sky_region = create_region(obs_id, logger, path)[0]
-    mean_rm = ionospheric_RM(obs_id, cal_ms, path)
+    #mean_rm = ionospheric_RM(obs_id, cal_ms, path)
 
     #get flux from all images
     I_flux = []
@@ -693,7 +693,7 @@ def plot_results_from_im(obs_id, logger, cal_ms, path):
     axes[1].legend()
 
     axes[2].plot(freq_Ghz, pola_val, 'o', color='tab:blue', label="data")
-    axes[2].plot(freq_Ghz, pola_val - np.degrees(mean_rm*wavelength_m**2), 'o', color='tab:green', label='corr data')
+    #axes[2].plot(freq_Ghz, pola_val - np.degrees(mean_rm*wavelength_m**2), 'o', color='tab:green', label='corr data')
     axes[2].plot(freq_Ghz, model_pola(freq_Ghz),'-', color='tab:red', label='model')
     axes[2].set_xlabel("Frequency (GHz)")
     axes[2].set_ylabel("polarisation angle")
@@ -704,7 +704,7 @@ def plot_results_from_im(obs_id, logger, cal_ms, path):
     return f'{path}/PLOTS/{obs_id}_3c286_RMsynth_param_from_im.png'
 #---------------------------------------------------------------------------
 
-def run(logger, obs_id, cal_ms, path):
+def run(logger, obs_id, pol_ms, path):
     """
     Image the polarisation calibrator via WSClean and determine the RM synthesis parameters
     of it with RMsynth3d for the given Observation ID.
@@ -732,10 +732,10 @@ def run(logger, obs_id, cal_ms, path):
         im_name = f'{path}/CAL_IMAGES/{obs_id}_cal_3c286'
 
         cmd = f"wsclean -name {im_name} -size 2048 2048 -scale 1.3asec -mgain 0.8 -niter 30000 -auto-threshold 0.5 -auto-mask 2.5 \
-                -field 1 -pol iquv -weight briggs -0.5 -j 32 -abs-mem 100.0 -channels-out 15 -join-channels -gridder wgridder -no-update-model-required \
+                -field 0 -pol iquv -weight briggs -0.5 -j 32 -abs-mem 100.0 -channels-out 15 -join-channels -gridder wgridder -no-update-model-required \
                 -squared-channel-joining -join-polarizations -fit-spectral-pol 4 -multiscale  -multiscale-scales 0,2,3,6 -multiscale-scale-bias 0.75 \
                 -parallel-deconvolution 1000 -parallel-gridding 1 -channel-range 0 2296 -nwlayers-factor 3 -minuvw-m 40 -no-mf-weighting -weighting-rank-filter 3 \
-                -data-column CORRECTED_DATA {cal_ms}"
+                -data-column CORRECTED_DATA {pol_ms}"
         stdout, stderr = utils.run_command(cmd)
         logger.info(stdout)
         if stderr:
@@ -807,7 +807,7 @@ def run(logger, obs_id, cal_ms, path):
         logger.info("IMAGE POLCAL: running rmsynth3d...")
         cube_name = f'{path}/STOKES_CUBES/{obs_id}_3c286_IQUV-'
         rm_name = f'{obs_id}_3c286-'
-        os.system('export PYTHONPATH=/opt/RM-Tools:$PYTHONPATH')
+        utils.run_command('export PYTHONPATH=/opt/RM-Tools:$PYTHONPATH')
         time.sleep(1)
         cmd = f"python3 /opt/RM-Tools/RMtools_3D/do_RMsynth_3D.py {cube_name}Q_cube.fits {cube_name}U_cube.fits {cube_name}freq.txt -i {cube_name}I_masked.fits -n {cube_name}rms.txt -v -l {phi_max} -s 30 -w 'variance' -o {rm_name}"
         logger.info(f"IMAGE POLCAL: Executing command: {cmd}")
@@ -840,7 +840,7 @@ def run(logger, obs_id, cal_ms, path):
     try:
         logger.info("\n\n\n\n\n")
         logger.info("IMAGE POLCAL: plotting results...")
-        plot = plot_results(obs_id, logger, cal_ms, path)
+        plot = plot_results(obs_id, logger, path)
         logger.info('IMAGE POLCAL: finished plotting results')
         logger.info("")
         logger.info("")
@@ -859,7 +859,7 @@ def run(logger, obs_id, cal_ms, path):
     try:
         logger.info("\n\n\n\n\n")
         logger.info("IMAGE POLCAL: calculating RM values from image...")
-        plot_im = plot_results_from_im(obs_id, logger, cal_ms, path)
+        plot_im = plot_results_from_im(obs_id, logger, path)
         logger.info('IMAGE POLCAL: finished calculating RM values from image')
         logger.info("")
         logger.info("")

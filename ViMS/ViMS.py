@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
-
+from __future__ import annotations
 import os
-from utils import paths, log, cal_ms
+from utils import paths, log, ms_prep
 import argparse
+import glob
 
 # Delete old CASA log files
 log.delete_old_casa_logs()
 
-from scripts import flag, crosscal, im_polcal, selfcal, flag_field
+from scripts import flag, feedswap, crosscal, im_polcal, selfcal, flag_field
 
 # List of observation IDs
 OBS_ALL = [f"obs{str(i).zfill(2)}" for i in range(1, 65)]
@@ -15,7 +16,7 @@ OBS_ALL = [f"obs{str(i).zfill(2)}" for i in range(1, 65)]
 parser = argparse.ArgumentParser(description="Victoria MeerKAT Survey (ViMS) pipeline.")
 parser.add_argument("--obs-id", nargs="+", help="List of observation IDs to run (e.g., obs01 obs02)")
 parser.add_argument("--start-from", type=str, help="Start from this observation ID and run all the following ones")
-parser.add_argument("--start-step", type=str, choices=["flag", "crosscal", "im_polcal", "applycal", "flag_fields", "selfcal"], default="flag",
+parser.add_argument("--start-step", type=str, choices=["flag", "crosscal", "im_polcal", "flag_fields", "applycal", "selfcal"], default="flag",
                     help="Pipeline step to start from (default: flag)")
 args = parser.parse_args()
 
@@ -32,7 +33,7 @@ else:
     obs_ids = OBS_ALL  # default: run all
 
 # Determine starting step
-steps = {"flag": 1, "crosscal": 2, "im_polcal": 3, "applycal": 4, "flag_fields":5, "selfcal": 6}
+steps = {"flag": 1, "crosscal": 2, "im_polcal": 3, "flag_fields": 4, "applycal":5, "selfcal": 6}
 current_step = steps[args.start_step]
 
 # Initialize Google Doc
@@ -49,6 +50,8 @@ for obs_id in obs_ids:
     ms_dir = os.path.join(output_dir, "MS_FILES")
     cubes_dir = os.path.join(output_dir, "STOKES_CUBES")
     ionex_dir = os.path.join(output_dir, "IONEX_DATA")
+    target_im_dir = os.path.join(output_dir, "TARGET_IMAGES")
+    selfcal_dir = os.path.join(output_dir, "SELFCAL_PRODUCTS")
     
     # Create a logger instance for this obs
     logger_instance = log.Logger(logs_dir)
@@ -62,11 +65,20 @@ for obs_id in obs_ids:
     # Log the obs header
     log.log_obs_header(logger, obs_id)
     #log.log_obs_header_google_doc(obs_id, doc_name_plots)
-
+ 
+    # copy and unzip the full ms file to the working server /beegfs -NOT YET IMPLEMETED
+    full_ms = ms_prep.copy_ms(logger, obs_id, output_dir)
+    full_ms = glob.glob(f'/beegfs/bba5268/meerkat_virgo/raw/{obs_id}*-sdp_l0.ms')[0]
+    
+    
     # Split full msfile into calibrator ms file (returns full path as a string)
-    # cal_ms_file = cal_ms.split_cal(logger, obs_id, output_dir)
-    # cal_ms_file = '/localwork/angelina/meerkat_virgo/Obs26/msdir/obs26_1686670937_sdp_l0-cal.ms'
-    cal_ms_file = "/a.benati/lw/victoria/tests/flag/obs01_1662797070_sdp_l0-cal_copy.ms"
+    cal_ms_file = ms_prep.split_cal(logger, obs_id, full_ms, output_dir)
+    #cal_ms_file = '/localwork/angelina/meerkat_virgo/Obs25/obs25_1686240076_sdp_l0-cal.ms'
+    #cal_ms_file = "/a.benati/lw/victoria/tests/flag/obs01_1662797070_sdp_l0-cal_copy.ms"
+
+    # swap the feeds of the calibrator ms file, will skip automatically if already exists
+    feedswap.run(logger, cal_ms_file, output_dir)
+
     
     ##########################################################
     ########################## FLAG ##########################
@@ -74,30 +86,45 @@ for obs_id in obs_ids:
     if current_step <= 1:
         flag.run(logger, obs_id, cal_ms_file, output_dir)
 
+    #average the calibrator ms file and split into polarisation calibrator and flux/gain claibrator
+    pol_ms, flux_ms = ms_prep.average_cal(logger, cal_ms_file, output_dir)
+
     ##########################################################
     ######################## CROSSCAL ########################
     ##########################################################
     if current_step <= 2:
-        crosscal.run(logger, obs_id, cal_ms_file, output_dir)
+        crosscal.run(logger, obs_id, flux_ms, pol_ms, output_dir)
 
     ##########################################################
     ####################### POLCAL IM ########################
     ##########################################################
     if current_step <= 3:
-        im_polcal.run(logger, obs_id, cal_ms_file, output_dir)
+        im_polcal.run(logger, obs_id, pol_ms, output_dir)
     
-    ##########################################################
-    ####################### APPLY CAL ########################
-    ##########################################################
-    if current_step <= 4:
-        # cal_ms.cal_lib(obs_id, logger, "J1939-6342", output_dir)
-        targets = cal_ms.split_targets(obs_id, logger, output_dir)
+    #--------------------------------------------------------
+    # Split the full ms file into target ms files
+    targets = ms_prep.split_targets(logger, obs_id, full_ms, output_dir)
+
+    # swap the feeds of the target ms files, will skip automatically if already exists
+    for target in targets:
+        split_ms = glob.glob(f"{ms_dir}/*{target}.ms")[0]
+        feedswap.run(logger, split_ms, output_dir, fields=[0])
+    
+    #---------------------------------------------------------
 
     ##########################################################
     ###################### FLAG FIELDS #######################
     ##########################################################
-    if current_step <= 5:
+    
+    if current_step <= 4:
         flag_field.run(logger, obs_id, targets, output_dir)
+
+    ##########################################################
+    ####################### APPLY CAL ########################
+    ##########################################################
+    if current_step <= 5:
+        #cal_ms.cal_lib(obs_id, logger, "J1939-6342", output_dir)
+        ms_prep.average_targets(logger, obs_id, targets, output_dir)
 
     ##########################################################
     ######################## SELFCAL #########################
