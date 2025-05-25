@@ -66,9 +66,10 @@ for obs_id in obs_ids:
     log.log_obs_header(logger, obs_id)
     #log.log_obs_header_google_doc(obs_id, doc_name_plots)
  
-    # copy and unzip the full ms file to the working server /beegfs -NOT YET IMPLEMETED
+    # copy and unzip the full ms file to the working server /beegfs -NOT YET IMPLEMENTED
     #full_ms = ms_prep.copy_ms(logger, obs_id, output_dir)
-    full_ms = glob.glob(f'/beegfs/bba5268/meerkat_virgo/raw/{obs_id}*sdp_l0.ms')[0]
+    #full_ms = glob.glob(f'/beegfs/bba5268/meerkat_virgo/raw/{obs_id}*sdp_l0.ms')[0]
+    full_ms = glob.glob(f'/lofar2//p1uy068/meerkat-virgo/raw/{obs_id}*sdp_l0.ms')[0]
     
     
     # Split full msfile into calibrator ms file (returns full path as a string)

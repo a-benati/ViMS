@@ -748,7 +748,7 @@ def run(logger, obs_id, pol_ms, path):
         cutoff = int((1380 - 900)/chan_width) # cutoff at 1380 MHz to avoid off-axis leakage
 
         cmd = f"wsclean -name {im_name} -size 2048 2048 -scale 1.3asec -mgain 0.8 -niter 30000 -auto-threshold 0.5 -auto-mask 2.5 \
-                -field 0 -pol iquv -weight briggs -0.5 -j 32 -abs-mem 100.0 -channels-out 15 -join-channels -gridder wgridder -no-update-model-required \
+                -field 0 -pol iquv -weight briggs -0.5 -j 32 -abs-mem 100.0 -channels-out 10 -join-channels -gridder wgridder -no-update-model-required \
                 -squared-channel-joining -join-polarizations -fit-spectral-pol 4 -multiscale  -multiscale-scales 0,2,3,6 -multiscale-scale-bias 0.75 \
                 -parallel-deconvolution 1000 -parallel-gridding 1 -channel-range 0 {cutoff} -nwlayers-factor 3 -minuvw-m 40 -no-mf-weighting -weighting-rank-filter 3 \
                 -data-column CORRECTED_DATA {pol_ms}"
