@@ -1,6 +1,7 @@
 import sys, os
-from utils import log
-import utils
+sys.path.insert(0, '/angelina/meerkat_virgo/scripts_fra')
+from utils import log, utils
+#import utils
 import glob
 import time
 
@@ -108,12 +109,12 @@ def make_cubes(logger, obs_id, path):
     f_rms = open(output_cube+'rms.txt', 'w')
     np.savetxt(f_rms, rms_p)
     f_rms.close()
-    logger.info(' make_cube: Writing {output_cube}rms.txt')
+    logger.info(f' make_cube: Writing {output_cube}rms.txt')
 
     f_freq= open(output_cube+'freq.txt', 'w')
     np.savetxt(f_freq, array_freq)
     f_freq.close()
-    logger.info('make_cube: writing {output_cube}freq.txt')
+    logger.info(f'make_cube: writing {output_cube}freq.txt')
 
 #-------------------------------------------------------------------
 
@@ -316,6 +317,7 @@ def final_rm_synth(obs_id, sigma_p, d_phi, logger, path):
 def create_region(obs_id, logger, path):
     from astropy.wcs import WCS
     from astropy.io import fits
+    from astropy.coordinates import SkyCoord
     from skimage.measure import find_contours
     import numpy as np
     from regions import PolygonSkyRegion, Regions
@@ -336,15 +338,21 @@ def create_region(obs_id, logger, path):
     noise = StokesI_MFS_noise(obs_id, logger, path)
 
     #determine contour for central source
-    contours = find_contours(data, 10*noise)
-    ny, nx = data.shape
-    center_pixel = (nx / 2, ny / 2)
+    contours = find_contours(data, 15*noise)
+    #ny, nx = data.shape
+    #center_pixel = ((nx-1)/2, (ny-1)/2)
+    ra_3c286 = 202.78481  # 13h31m08.354s
+    dec_3c286 = 30.50911  # +30d30m32.96s
+    source_coord = SkyCoord(ra=ra_3c286, dec=dec_3c286, unit='deg')
+
     best_contour = None
     best_distance = np.inf
 
     for contour in contours:
         centroid = np.mean(contour,axis=0) #calculate center of each contour
-        dist = np.hypot(centroid[1] - center_pixel[0], centroid[0] - center_pixel[1])
+        centroid_sky  = wcs.pixel_to_world(centroid[1], centroid[0])
+        #dist = np.hypot(centroid[1] - center_pixel[0], centroid[0] - center_pixel[1])
+        dist = centroid_sky.separation(source_coord).arcsec
         if dist < best_distance:
             best_distance = dist
             best_contour = contour
@@ -353,7 +361,7 @@ def create_region(obs_id, logger, path):
         logger.error('Error in create_region: No contour found')
         raise ValueError("No contour found")
     
-    logger.info(f'create_region: found contour with distance {best_distance} from center pixel')
+    logger.info(f'create_region: found contour with distance {best_distance} arcsec from poaition of 3C286')
 
     #convert to sky coordinates
     y_coords = best_contour[:, 0]
@@ -705,6 +713,8 @@ def plot_results_from_im(obs_id, logger, path):
 #---------------------------------------------------------------------------
 
 def run(logger, obs_id, pol_ms, path):
+    from casatools import msmetadata
+    import numpy as np
     """
     Image the polarisation calibrator via WSClean and determine the RM synthesis parameters
     of it with RMsynth3d for the given Observation ID.
@@ -731,10 +741,16 @@ def run(logger, obs_id, pol_ms, path):
 
         im_name = f'{path}/CAL_IMAGES/{obs_id}_cal_3c286'
 
+        msmd = msmetadata()
+        msmd.open(pol_ms)
+        chan_width = np.mean(msmd.chanwidths(0))*1e-3 # convert to MHz
+        msmd.close()
+        cutoff = int((1380 - 900)/chan_width) # cutoff at 1380 MHz to avoid off-axis leakage
+
         cmd = f"wsclean -name {im_name} -size 2048 2048 -scale 1.3asec -mgain 0.8 -niter 30000 -auto-threshold 0.5 -auto-mask 2.5 \
                 -field 0 -pol iquv -weight briggs -0.5 -j 32 -abs-mem 100.0 -channels-out 15 -join-channels -gridder wgridder -no-update-model-required \
                 -squared-channel-joining -join-polarizations -fit-spectral-pol 4 -multiscale  -multiscale-scales 0,2,3,6 -multiscale-scale-bias 0.75 \
-                -parallel-deconvolution 1000 -parallel-gridding 1 -channel-range 0 2296 -nwlayers-factor 3 -minuvw-m 40 -no-mf-weighting -weighting-rank-filter 3 \
+                -parallel-deconvolution 1000 -parallel-gridding 1 -channel-range 0 {cutoff} -nwlayers-factor 3 -minuvw-m 40 -no-mf-weighting -weighting-rank-filter 3 \
                 -data-column CORRECTED_DATA {pol_ms}"
         stdout, stderr = utils.run_command(cmd)
         logger.info(stdout)
@@ -807,14 +823,12 @@ def run(logger, obs_id, pol_ms, path):
         logger.info("IMAGE POLCAL: running rmsynth3d...")
         cube_name = f'{path}/STOKES_CUBES/{obs_id}_3c286_IQUV-'
         rm_name = f'{obs_id}_3c286-'
-        utils.run_command('export PYTHONPATH=/opt/RM-Tools:$PYTHONPATH')
-        time.sleep(1)
-        cmd = f"python3 /opt/RM-Tools/RMtools_3D/do_RMsynth_3D.py {cube_name}Q_cube.fits {cube_name}U_cube.fits {cube_name}freq.txt -i {cube_name}I_masked.fits -n {cube_name}rms.txt -v -l {phi_max} -s 30 -w 'variance' -o {rm_name}"
+        cmd = f"export PYTHONPATH=/opt/RM-Tools:$PYTHONPATH && python3 /opt/RM-Tools/RMtools_3D/do_RMsynth_3D.py {cube_name}Q_cube.fits {cube_name}U_cube.fits {cube_name}freq.txt -i {cube_name}I_masked.fits -n {cube_name}rms.txt -v -l {phi_max} -s 30 -w 'variance' -o {rm_name}"
         logger.info(f"IMAGE POLCAL: Executing command: {cmd}")
         stdout, stderr = utils.run_command(cmd)
         logger.info(stdout)
         if stderr:
-            logger.error(f"Error in WSClean: {stderr}")
+            logger.error(f"Error in RMsynth: {stderr}")
         logger.info("IMAGE POLCAL: finished rmsynth3d")
         logger.info("")
         logger.info("")

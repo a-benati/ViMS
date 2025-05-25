@@ -67,8 +67,8 @@ for obs_id in obs_ids:
     #log.log_obs_header_google_doc(obs_id, doc_name_plots)
  
     # copy and unzip the full ms file to the working server /beegfs -NOT YET IMPLEMETED
-    full_ms = ms_prep.copy_ms(logger, obs_id, output_dir)
-    full_ms = glob.glob(f'/beegfs/bba5268/meerkat_virgo/raw/{obs_id}*-sdp_l0.ms')[0]
+    #full_ms = ms_prep.copy_ms(logger, obs_id, output_dir)
+    full_ms = glob.glob(f'/beegfs/bba5268/meerkat_virgo/raw/{obs_id}*sdp_l0.ms')[0]
     
     
     # Split full msfile into calibrator ms file (returns full path as a string)
@@ -108,7 +108,7 @@ for obs_id in obs_ids:
     # swap the feeds of the target ms files, will skip automatically if already exists
     for target in targets:
         split_ms = glob.glob(f"{ms_dir}/*{target}.ms")[0]
-        feedswap.run(logger, split_ms, output_dir, fields=[0])
+        feedswap.run(logger, split_ms, output_dir, fields=[0], filename=f"feedswap_{target}.txt")
     
     #---------------------------------------------------------
 
@@ -124,7 +124,8 @@ for obs_id in obs_ids:
     ##########################################################
     if current_step <= 5:
         #cal_ms.cal_lib(obs_id, logger, "J1939-6342", output_dir)
-        ms_prep.average_targets(logger, obs_id, targets, output_dir)
+        new_ms = ms_prep.average_targets(logger, obs_id, targets, output_dir, force=True)
+        ms_prep.ionosphere_corr_target(logger, obs_id, targets, new_ms, output_dir)
 
     ##########################################################
     ######################## SELFCAL #########################

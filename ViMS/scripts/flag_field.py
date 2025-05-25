@@ -57,7 +57,7 @@ def run(logger, obs_id, targets, path):
 
     # FLAGMANAGER FOR SAVING FLAGS
     for target in targets:
-        split_ms = glob.glob(f"{path}/MS_FILES/{obs_id}_*{target}*.ms")
+        split_ms = glob.glob(f"{path}/MS_FILES/{obs_id}_*{target}*.ms")[0]
         logger.info(f"found {target} ms file: {split_ms}")
     
         try:
@@ -206,16 +206,16 @@ def run(logger, obs_id, targets, path):
             logger.exception("Error while flagging bad channels")
 
     #APPLY FLAG MASK (RFI MASKER)
-        stdout, stderr = utils.run_command(f"mask_ms.py --mask /ViMS/ViMS/utils/meerkat.rfimask.npy \
-                                     --accumulation_mode or --memory 4096 --uvrange 0~1000\
-                                     {split_ms}")
+        #stdout, stderr = utils.run_command(f"mask_ms.py --mask /ViMS/ViMS/utils/meerkat.rfimask.npy \
+         #                            --accumulation_mode or --memory 4096 --uvrange 0~1000\
+          #                           {split_ms}")
 
     #TRICOLOUR AUTO-FLAGGING
         try:
             logger.info("\n\n\n\n\n")
             logger.info("FLAG: Flagging with Tricolour target fields...")
             logger.info("-------------------------------------------------------------------------------------")
-            stdout, stderr = utils.run_command(f"tricolour --config /VIMS/VIMS/utils/mk_rfi_flagging_target_fields_firstpass.yaml\
+            stdout, stderr = utils.run_command(f"tricolour --config /angelina/meerkat_virgo/VIMS/VIMS/utils/mk_rfi_flagging_target_fields_firstpass.yaml\
                                                 --flagging-strategy polarisation --data-column DATA --field-names {target}\
                                                 --window-backend numpy {split_ms}")
             logger.info(stdout)

@@ -11,8 +11,8 @@ def file_size(path):
 def free_space(path):
     """Returns the free disk space in MB for the given path."""
     total, used, free = shutil.disk_usage(path)
-    mb = (1024*1024)
-    return (total/mb, used/mb, free/mb)
+    gb = (1024*1024*1024)
+    return (total/gb, used/gb, free/gb)
 
 def cal_lib(logger, obs_id, target, path):
     """
@@ -72,11 +72,6 @@ def split_cal(logger, obs_id, full_ms, path):
         logger.info(f'Splitting the calibrators of file {full_ms}')
         logger.info(f'Creating calibrators ms file {split_ms}')
 
-        cal_size = file_size(split_ms)
-        space_left = free_space(f'{path}')
-
-        logger.info(f'Size of the calibrator file:{cal_size} MB. Space left in target path {path}/MS_FILES/; {space_left[2]}/{space_left[0]} MB')
-
         mstransform(vis=full_ms, outputvis=split_ms, createmms=False,\
                 separationaxis="auto",numsubms="auto", tileshape=[0],field="J1939-6342,J1150-0023,J1331+3030",spw="0:0.9~1.65GHz",scan="",antenna="",\
                 correlation="",timerange="",intent="",array="",uvrange="",observation="",feed="",datacolumn="data",realmodelcol=False,keepflags=True,\
@@ -84,6 +79,11 @@ def split_cal(logger, obs_id, full_ms, path):
                 nspw=1,interpolation="linear",phasecenter="",restfreq="",outframe="", veltype="radio",preaverage=False,timeaverage=False,timebin="",\
                 timespan="", maxuvwdistance=0.0,docallib=False,callib="",douvcontsub=False,fitspw="", fitorder=0,want_cont=False,denoising_lib=True,\
                 nthreads=1,niter=1, disableparallel=False,ddistart=-1,taql="",monolithic_processing=False,reindex=True)
+        
+        cal_size = file_size(split_ms)
+        space_left = free_space(f'{path}')
+
+        logger.info(f'Size of the calibrator file:{cal_size} MB. Space left in target path {path}/MS_FILES/; {space_left[2]}/{space_left[0]} GB ({space_left[2]/space_left[0] *100} %)')
         
         if os.path.exists(f"{path}/LOGS/feedswap.txt"):
             os.remove("feedswap.txt")
@@ -102,7 +102,7 @@ def average_cal(logger, cal_ms, path, nchan=512):
     """
     from casatasks import mstransform
     from casatools import msmetadata
-
+    from utils import utils
     
     basename = os.path.basename(cal_ms)
     base, ext = os.path.splitext(basename)
@@ -112,19 +112,31 @@ def average_cal(logger, cal_ms, path, nchan=512):
     pol_ms_avg = f'{path}/MS_FILES/{base}-pol{ext}'
     flux_ms_avg = f'{path}/MS_FILES/{base}-flux{ext}'
 
+    msmd = msmetadata()
+    msmd.open(cal_ms)
+    nchan_cal = msmd.nchan(0)
+    msmd.close()
+
     if os.path.isdir(pol_ms_avg):
         msmd = msmetadata()
         msmd.open(pol_ms_avg)
         nchan_in = msmd.nchan(0)
         msmd.close()
 
-        if nchan_in == nchan:
+        if nchan_in >= nchan -100 and nchan_in <= nchan +100:
             logger.info(f'Polarisation calibrator ms file {pol_ms_avg} already exists with specified channel number. Skipping averaging step.')
-            return pol_ms_avg
         
         else:
             logger.info(f'Polarisation calibrator ms file {pol_ms_avg} already exists but with different channel number. Recreating...')
-            chanbin = round(nchan_in/nchan)
+            chanbin = round(nchan_cal/nchan)
+
+            cmd = f"rm -r {pol_ms_avg} && rm -r {pol_ms_avg}.flagversions"
+
+
+            stdout, stderr = utils.run_command(cmd)
+            logger.info(stdout)
+            if stderr:
+                logger.error(f"Error in deletin ms file: {stderr}")
             
             mstransform(vis=cal_ms, outputvis=pol_ms_avg, createmms=False,\
                 separationaxis="auto",numsubms="auto", tileshape=[0],field="J1331+3030",spw="0:0.9~1.65GHz",scan="",antenna="",\
@@ -138,7 +150,7 @@ def average_cal(logger, cal_ms, path, nchan=512):
 
     else:
         logger.info(f'Creating polarisation calibrator ms file {pol_ms_avg}')
-        chanbin = round(nchan_in/nchan)
+        chanbin = round(nchan_cal/nchan)
         
         mstransform(vis=cal_ms, outputvis=pol_ms_avg, createmms=False,\
             separationaxis="auto",numsubms="auto", tileshape=[0],field="J1331+3030",spw="0:0.9~1.65GHz",scan="",antenna="",\
@@ -156,13 +168,19 @@ def average_cal(logger, cal_ms, path, nchan=512):
         nchan_in = msmd.nchan(0)
         msmd.close()
 
-        if nchan_in == nchan:
+        if nchan_in >= nchan -100 and nchan_in <= nchan +100:
             logger.info(f'flux/gain calibrator ms file {flux_ms_avg} already exists with specified channel number. Skipping averaging step.')
-            return flux_ms_avg
         
         else:
             logger.info(f'Polarisation calibrator ms file {flux_ms_avg} already exists but with different channel number. Recreating...')
-            chanbin = round(nchan_in/nchan)
+            chanbin = round(nchan_cal/nchan)
+
+            cmd = f"rm -r {flux_ms_avg} && rm -r {flux_ms_avg}.flagversions"
+
+            stdout, stderr = utils.run_command(cmd)
+            logger.info(stdout)
+            if stderr:
+                logger.error(f"Error in deletin ms file: {stderr}")
             
             mstransform(vis=cal_ms, outputvis=flux_ms_avg, createmms=False,\
                 separationaxis="auto",numsubms="auto", tileshape=[0],field="J1939-6342,J1150-0023",spw="0:0.9~1.65GHz",scan="",antenna="",\
@@ -176,7 +194,7 @@ def average_cal(logger, cal_ms, path, nchan=512):
 
     else:
         logger.info(f'Creating flux/gain calibrator ms file {flux_ms_avg}')
-        chanbin = round(nchan_in/nchan)
+        chanbin = round(nchan_cal/nchan)
         
         mstransform(vis=cal_ms, outputvis=flux_ms_avg, createmms=False,\
             separationaxis="auto",numsubms="auto", tileshape=[0],field="J1939-6342,J1150-0023",spw="0:0.9~1.65GHz",scan="",antenna="",\
@@ -249,20 +267,24 @@ def split_targets(logger, obs_id, full_ms, path):
         
             target_size = file_size(split_ms)
             space_left = free_space(f'{path}')
-            logger.info(f'Size of the target file:{target_size} MB. Space left in target path {path}; {space_left[2]}/{space_left[0]} MB')
+            logger.info(f'Size of the target file:{target_size} MB. Space left in target path {path}; {space_left[2]}/{space_left[0]} GB. ({space_left[2]/space_left[0]*100} %)')
     
     logger.info('Saved all target ms files successfully!')
     return targets
 
 #----------------------------------------------------------------------------------------------------------------
 
-def average_targets(logger, obs_id, targets, path, nchan=512):
+def average_targets(logger, obs_id, targets, path, nchan=512, force=False):
     from casatasks import mstransform
     from casatools import msmetadata
     import glob
+    from utils import utils
     """
-    average each target ms file and apply the calibration tables on the fly
+    average each target ms file and apply the calibration tables on the fly.
+    The last calibration table applied is an ionospheric RM correction.
     """
+
+    redone = []
 
     for target in targets:
         split_ms = glob.glob(f'{path}/MS_FILES/*{target}.ms')[0]
@@ -273,19 +295,57 @@ def average_targets(logger, obs_id, targets, path, nchan=512):
         
         base, ext = os.path.splitext(split_ms)
         split_ms_avg = f"{base}-avg{ext}"
+
+        msmd = msmetadata()
+        msmd.open(split_ms)
+        nchan_tar = msmd.nchan(0)
+        msmd.close()
+
+        if force == True and os.path.isdir(split_ms_avg):
+            logger.info(f'Forcing recreation of target ms file {split_ms_avg}')
+            chanbin = round(nchan_tar/nchan)
+
+            cmd = f"rm -r {split_ms} && rm -r {split_ms}.flagversions"
+
+            stdout, stderr = utils.run_command(cmd)
+            logger.info(stdout)
+            if stderr:
+                logger.error(f"Error in deleting ms file: {stderr}")
+
+            mstransform(vis=split_ms,outputvis=split_ms_avg,createmms=False,\
+                    separationaxis="auto",numsubms="auto",tileshape=[0],field=target,spw="",scan="",antenna="", correlation="",timerange="",intent="",\
+                    array="",uvrange="",observation="",feed="",datacolumn="data",realmodelcol=False,keepflags=True,\
+                    usewtspectrum=True,combinespws=False,chanaverage=True,chanbin=chanbin,hanning=False, regridms=False,mode="channel",nchan=-1,start=0,width=1,\
+                    nspw=1,interpolation="linear",phasecenter="",restfreq="",outframe="",veltype="radio",preaverage=False,timeaverage=False,timebin="",\
+                    timespan="",maxuvwdistance=0.0,docallib=True, callib=cal_lib(logger, obs_id, target, path),\
+                    douvcontsub=False,fitspw="",fitorder=0,want_cont=False,denoising_lib=True,nthreads=1,niter=1,disableparallel=False,ddistart=-1,taql="",\
+                    monolithic_processing=False,reindex=True)
         
-        if os.path.isdir(split_ms_avg):
+            cal_size = file_size(split_ms_avg)
+            space_left = free_space(f'{path}')
+            logger.info(f'Size of the target file:{cal_size} MB. Space left in target path {path}; {space_left[2]}/{space_left[0]} GB. ({space_left[2]/space_left[0]*100} %)')
+            redone.append(True)
+        
+        elif os.path.isdir(split_ms_avg) and force == False:
             msmd = msmetadata()
             msmd.open(split_ms_avg)
             nchan_in = msmd.nchan(0)
             msmd.close()
 
-            if nchan_in == nchan:
+            if nchan_in >= nchan -100 and nchan_in <= nchan +100:
                 logger.info(f'Target ms file {split_ms} averaged to {nchan} channels already exists. Skipping averaging step.')
+                redone.append(False)
                 continue
             else:
                 logger.info(f'Target ms file {split_ms} already exists but with different channel number. Recreating...')
-                chanbin = round(nchan_in/nchan)
+                chanbin = round(nchan_tar/nchan)
+
+                cmd = f"rm -r {split_ms} && rm -r {split_ms}.flagversions"
+
+                stdout, stderr = utils.run_command(cmd)
+                logger.info(stdout)
+                if stderr:
+                    logger.error(f"Error in deleting ms file: {stderr}")
 
                 mstransform(vis=split_ms,outputvis=split_ms_avg,createmms=False,\
                     separationaxis="auto",numsubms="auto",tileshape=[0],field=target,spw="",scan="",antenna="", correlation="",timerange="",intent="",\
@@ -298,10 +358,11 @@ def average_targets(logger, obs_id, targets, path, nchan=512):
         
                 cal_size = file_size(split_ms_avg)
                 space_left = free_space(f'{path}')
-                logger.info(f'Size of the target file:{cal_size} MB. Space left in target path {path}; {space_left[2]}/{space_left[0]} MB')
+                logger.info(f'Size of the target file:{cal_size} MB. Space left in target path {path}; {space_left[2]}/{space_left[0]} GB. ({space_left[2]/space_left[0]*100} %)')
+                redone.append(True)
         else:
             logger.info(f'Creating target ms file {split_ms_avg}')
-            chanbin = round(nchan_in/nchan)
+            chanbin = round(nchan_tar/nchan)
 
             mstransform(vis=split_ms,outputvis=split_ms_avg,createmms=False,\
                 separationaxis="auto",numsubms="auto",tileshape=[0],field=target,spw="",scan="",antenna="", correlation="",timerange="",intent="",\
@@ -314,8 +375,46 @@ def average_targets(logger, obs_id, targets, path, nchan=512):
         
             cal_size = file_size(split_ms_avg)
             space_left = free_space(f'{path}')
-            logger.info(f'Size of the target file:{cal_size} MB. Space left in target path {path}; {space_left[2]}/{space_left[0]} MB')
+            logger.info(f'Size of the target file:{cal_size} MB. Space left in target path {path}; {space_left[2]}/{space_left[0]} GB. ({space_left[2]/space_left[0]*100} %)')
+            redone.append(True)
     
     logger.info('Averaged all target ms files and applied calibration tables successfully!')
 
+    return redone
 
+#----------------------------------------------------------------------------------------------------------------
+
+def ionosphere_corr_target(logger, obs_id, targets, new_ms, path):
+    from pathlib import Path
+    from spinifex import h5parm_tools
+    from spinifex.vis_tools import ms_tools
+    from utils import utils
+    """
+    Calculate the ionospheric RM for the target fields and apply it as an claibration table to the data.
+    """
+    for target, new in zip(targets, new_ms):
+        if new == True:
+            logger.info(f'Calculating ionospheric RM for target {target}')
+            target_avg = glob.glob(f"{path}/MS_FILES/{obs_id}*{target}-avg.ms")[0]
+        
+            ms_path = Path(target_avg)
+            ms_metadata = ms_tools.get_metadata_from_ms(ms_path)
+            ionex_dir = f'{path}/IONEX_DATA'
+
+            rms = ms_tools.get_rm_from_ms(ms_path, use_stations=ms_metadata.station_names)
+            h5parm_name = f"{path}/CAL_TABLES/{obs_id}_{target}.h5parm"
+            if os.path.exists(h5parm_name):
+                os.remove(h5parm_name)
+                logger.info(f"ionosphere_rm: Removed existing h5parm file {h5parm_name}")
+            h5parm_tools.write_rm_to_h5parm(rms=rms, h5parm_name=h5parm_name)
+            logger.info(f"ionosphere_rm: Created h5parm file {h5parm_name} with ionospheric RM.")
+
+            cmd = f"DP3 msin={target_avg} msout=. msin.datacolumn=DATA msout.datacolumn=DATA steps=[cor] cor.type=correct cor.parmdb={h5parm_name} cor.correction=rotationmeasure000 cor.invert=True"
+            stdout, stderr = utils.run_command(cmd)
+            logger.info(stdout)
+            if stderr:
+                logger.error(f"Error in DP3: {stderr}")
+        else:
+            logger.info(f'Target {target} ms file is already corrected for ionospheric RM. Will not be reprocessed.')
+            continue
+ 

@@ -60,10 +60,12 @@ def redirect_casa_log(logger, delay=1.0):
         logger: The logger instance of the pipeline.
         delay: Seconds to wait before reading the file (in case CASA is still writing).
     """
-    casa_log = glob.glob("casa-*.log")[0]
-    if not casa_log:
+    casa_logs = glob.glob("casa-*.log")
+    if not casa_logs:
         logger.warning("No CASA log file found.")
         return
+    else:
+        casa_log = casa_logs[0]
     
     try:
         time.sleep(delay)  # wait in case CASA is finishing writing

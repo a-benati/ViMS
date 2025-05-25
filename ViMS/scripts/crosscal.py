@@ -107,16 +107,19 @@ def ionosphere_rm(logger, pol_ms, obs_id, path):
     from pathlib import Path
     from spinifex import h5parm_tools
     from spinifex.vis_tools import ms_tools
+    import os
     """
     Calculate the ionospheric RM for the polarisation calibrator and create a h5param file.
     """
 
     ms_path = Path(pol_ms)
     ms_metadata = ms_tools.get_metadata_from_ms(ms_path)
-    ionex_dir = f'{path}/IONEX_DATA'
 
-    rms = ms_tools.get_rms_from_ms(ms_path, use_stations=ms_metadata.station_names, prefix='cod', output_directory=ionex_dir)
+    rms = ms_tools.get_rm_from_ms(ms_path, use_stations=ms_metadata.station_names)
     h5parm_name = f"{path}/CAL_TABLES/{obs_id}_polcal.h5parm"
+    if os.path.isdir(h5parm_name):
+        logger.info(f"ionosphere_rm: Found {h5parm_name}. Deleting it.")
+        os.system(f"rm -rf {h5parm_name}")
     h5parm_tools.write_rm_to_h5parm(rms=rms, h5parm_name=h5parm_name)
     logger.info(f"ionosphere_rm: Created h5parm file {h5parm_name} with ionospheric RM.")
     return h5parm_name
@@ -202,18 +205,21 @@ def crosscal(logger, obs_id, cal_ms, pol_ms, path, ref_ant='m000'):
 
     flag_versions = flagmanager(vis=calms, mode='list')
 
+
     if isinstance(flag_versions, dict):
-        initial_flag = any(entry['name'] == obs+'_flag_after' for entry in flag_versions.values())
+        real_entries = [ v for v in flag_versions.values() if isinstance(v, dict) and 'name' in v]
+
+        initial_flag = any(entry['name'] == obs+'_flag_after' for entry in real_entries)
     else:
         initial_flag = False
 
     if initial_flag:
         flagmanager(vis=calms, mode='restore', versionname=obs+'_flag_after', merge='replace')
-        logger.info("crosscal: Found '"+obs+"_flag_after'. Restoring it.")
+        logger.info(f"crosscal: Found {obs}_flag_after. Restoring it.")
 
     else:
         flagmanager(vis=calms, mode='save', versionname=obs+'_flag_after', merge='replace')
-        logger.info("crosscal: No 'flag_after' found. Save current flagging state.")
+        logger.info(f"crosscal: No {obs}_flag_after found. Save current flagging state.")
 
     logger.info('')
     logger.info('Clearing calibrations')
@@ -227,16 +233,18 @@ def crosscal(logger, obs_id, cal_ms, pol_ms, path, ref_ant='m000'):
     flag_versions = flagmanager(vis=pol_ms, mode='list')
 
     if isinstance(flag_versions, dict):
-        initial_flag = any(entry['name'] == obs+'_flag_after' for entry in flag_versions.values())
+        real_entries = [ v for v in flag_versions.values() if isinstance(v, dict) and 'name' in v]
+        
+        initial_flag = any(entry['name'] == obs+'_flag_after' for entry in real_entries)
     else:
         initial_flag = False
 
     if initial_flag:
-        flagmanager(vis=calms, mode='restore', versionname=obs+'_flag_after', merge='replace')
+        flagmanager(vis=pol_ms, mode='restore', versionname=obs+'_flag_after', merge='replace')
         logger.info("crosscal: Found '"+obs+"_flag_after' for the polcal. Restoring it.")
 
     else:
-        flagmanager(vis=calms, mode='save', versionname=obs+'_flag_after', merge='replace')
+        flagmanager(vis=pol_ms, mode='save', versionname=obs+'_flag_after', merge='replace')
         logger.info("crosscal: No 'flag_after' found for the polcal. Save current flagging state.")
 
     logger.info('')
@@ -302,7 +310,7 @@ def crosscal(logger, obs_id, cal_ms, pol_ms, path, ref_ant='m000'):
 
     h5parm = ionosphere_rm(logger, pol_ms, obs_id, path)
 
-    cmd = f"DP3 msin={pol_ms} msout=. msin.datacolumn=MODEL_DATA msout.datacolumn=MODEL_DATA steps=[cor] cor.type=correct cor.parmdb={h5parm} corr.correction=rotationmeasure000 cor.invert=False"
+    cmd = f"DP3 msin={pol_ms} msout=. msin.datacolumn=MODEL_DATA msout.datacolumn=MODEL_DATA steps=[cor] cor.type=correct cor.parmdb={h5parm} cor.correction=rotationmeasure000 cor.invert=False"
     stdout, stderr = utils.run_command(cmd)
     logger.info(stdout)
     if stderr:
@@ -590,14 +598,14 @@ def crosscal(logger, obs_id, cal_ms, pol_ms, path, ref_ant='m000'):
               )
 
     
-    os.system(f'ragavi-gains --table {ptab_xf} --field 0 -o {path}/PLOTS/{obs}_Xfcal -p {path}/PLOTS/{obs}_Xfcal.png')
+    os.system(f'/opt/ragavi-env/bin/ragavi-gains --table {ptab_xf} --field 0 -o {path}/PLOTS/{obs}_Xfcal -p {path}/PLOTS/{obs}_Xfcal.png')
     
     logger.info("")
     logger.info('crosscal: Correcting for phase ambiguity')
     #exec(open('/localwork/angelina/meerkat_virgo/ViMS/ViMS/scripts/xyamb_corr.py').read())
     S=xyamb(logger, xytab=ptab_xf ,xyout=ptab_xfcorr)
 
-    os.system(f'ragavi-gains --table {ptab_xfcorr} --field 0 -o {path}/PLOTS/{obs}_Xfcal_ambcorr -p {path}/PLOTS/{obs}_Xfcal_ambcorr.png')
+    os.system(f'/opt/ragavi-env/bin/ragavi-gains --table {ptab_xfcorr} --field 0 -o {path}/PLOTS/{obs}_Xfcal_ambcorr -p {path}/PLOTS/{obs}_Xfcal_ambcorr.png')
 
     logger.info("")
     logger.info("crosscal: Finished calibration of the polarisation calibrator")
@@ -621,7 +629,7 @@ def crosscal(logger, obs_id, cal_ms, pol_ms, path, ref_ant='m000'):
     # Check: plot imaginary versis real and compare to previous plot
 
     os.system(f'/opt/shadems-env/bin/shadems {pol_ms} -x CORRECTED_DATA:imag -y CORRECTED_DATA:real -c CORR --corr XY,YX --field {xcal} --dir {path}/PLOTS --png {obs}_{xcal}_aftercalXf_XYYX_real_im.png')
-    os.system(f'ragavi-vis --ms {pol_ms} -x frequency -y phase -dc CORRECTED tbin 12000 -ca antenna1 --corr XY,YX --field {xcal} -o {path}/PLOTS/{obs}_{xcal}_aftercalXf_XYYX_phase.png')
+    os.system(f'/opt/ragavi-env/bin/ragavi-vis --ms {pol_ms} -x frequency -y phase -dc CORRECTED tbin 12000 -ca antenna1 --corr XY,YX --field {xcal} -o {path}/PLOTS/{obs}_{xcal}_aftercalXf_XYYX_phase.png')
 
 #------------------------------------------------------
 

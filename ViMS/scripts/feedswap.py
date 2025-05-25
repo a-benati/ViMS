@@ -179,17 +179,17 @@ def correct_parang(logger, ms_file, fields, ddid=0, storecolumn='DATA', rawcolum
             assert nrow == nrowsput
 
 
-def run(logger, cal_ms, path, fields=[0,1,2]):
+def run(logger, cal_ms, path, fields=[0,1,2], filename="feedswap_cal.txt"):
     try:
-        if os.path.exists(f"{path}/LOGS/feedswap.txt"):
+        if os.path.exists(f"{path}/LOGS/{filename}"):
             logger.info("FEEDSWAP: Feedswap already done, skipping...")
         
         else:
             logger.info("\n\n\n\n\n")
             logger.info("FEEDSWAP: starting Feedswap...")
-            correct_parang(logger, cal_ms, {fields})
+            correct_parang(logger, cal_ms, fields)
             logger.info('FEEDSWAP: finished Feedswap')
-            with open(f"{path}/LOGS/feedswap.txt", "w") as file:
+            with open(f"{path}/LOGS/{filename}", "w") as file:
                 file.write(f"Feedswap for the ms file {cal_ms} was done!")
             logger.info("")
             logger.info("")
