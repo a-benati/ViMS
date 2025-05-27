@@ -246,6 +246,8 @@ RUN python3 -m pip install RMExtract
 ## ShadeMS
 ####################################################################
 RUN python3.10 -m venv /opt/shadems-env 
+RUN /opt/shadems-env/bin/pip install --upgrade pip
+RUN /opt/shadems-env/bin/pip install dask[dataframe]
 RUN /opt/shadems-env/bin/pip install shadems
 
 ####################################################################
@@ -256,8 +258,144 @@ RUN python3.10 -m pip install ephem
 ####################################################################
 ## FACETSELFCAL
 ####################################################################
-RUN python3.10 -m pip install joblib psutil
-RUN python3.10 -m pip install git+https://github.com/rvweeren/lofar_facet_selfcal.git
+RUN python3.10 -m pip install numpy==1.26.4  && python3.10 -c "import numpy; print(numpy.__version__)" && sleep 15
+RUN python3.10 -m pip install joblib psutil  && python3.10 -c "import numpy; print(numpy.__version__)" && sleep 15
+RUN python3.10 -m pip install matplotlib --no-deps  && python3.10 -c "import numpy; print(numpy.__version__)" && sleep 15
+RUN python3.10 -m pip install git+https://github.com/rvweeren/lofar_facet_selfcal.git --no-deps && python3.10 -c "import numpy; print(numpy.__version__)" && sleep 15
+
+
+####################################################################
+## QUARTICAL
+####################################################################
+RUN python3.10 -m pip install quartical
+
+####################################################################
+## DDFACET
+####################################################################
+# Install Debian dependencies
+# ENV DEB_DEPENCENDIES \
+#     python3-virtualenv \
+#     python3-pip \
+#     libfftw3-dev \
+#     python3-numpy \
+#     libfreetype6 \
+#     libfreetype6-dev \
+#     libpng-dev \
+#     pkg-config \
+#     python3-dev \
+#     libboost-all-dev \
+#     libcfitsio-dev \
+#     libhdf5-dev \
+#     wcslib-dev \
+#     libatlas-base-dev \
+#     liblapack-dev \
+#     python3-tk \
+#     libreadline6-dev \
+#     subversion \
+#     liblog4cplus-dev \
+#     libhdf5-dev \
+#     libncurses5-dev \
+#     flex \
+#     bison \
+#     libbison-dev \
+#     libqdbm-dev \
+#     libgsl-dev \
+#     # Reference image generation dependencies
+#     make
+# RUN apt-get update
+# RUN apt-get install -y $DEB_DEPENCENDIES
+
+# Install system deps
+# RUN apt-get update && apt-get install -y \
+#     python3.10 \
+#     python3.10-venv \
+#     python3.10-dev \
+#     libpython3.10-dev \
+#     build-essential \
+#     cmake \
+#     git \
+#     libblas-dev \
+#     liblapack-dev \
+#     libatlas-base-dev \
+#     gfortran \
+#     libffi-dev \
+#     pkg-config \
+#     && apt-get clean
+
+# RUN apt-get update && apt-get install -y \
+#     build-essential \
+#     ninja-build \
+#     python3.10-dev \
+#     libpython3.10-dev \
+#     libfftw3-dev \
+#     git \
+#     g++ \
+#     && rm -rf /var/lib/apt/lists/*
+
+# RUN apt remove -y cmake && \
+#     wget https://github.com/Kitware/CMake/releases/download/v3.22.6/cmake-3.22.6-linux-x86_64.sh && \
+#     bash cmake-3.22.6-linux-x86_64.sh --prefix=/usr/local --skip-license && \
+#     ln -s /usr/local/bin/cmake /usr/bin/cmake && \
+#     cmake --version
+# RUN git clone https://github.com/saopicc/DDFacet.git /opt/DDFacet
+# WORKDIR /opt/DDFacet
+# RUN python3.10 -m pip install -U pip setuptools wheel
+# RUN python3.10 -m pip install "git+https://github.com/pyFFTW/pyFFTW.git"
+# RUN sed -i 's/cmake_minimum_required(VERSION 2.8)/cmake_minimum_required(VERSION 3.5)\nproject(DDFacet)/' /opt/DDFacet/DDFacet/CMakeLists.txt
+# RUN python3.10 -m pip install .[dft-support,moresane-support,testing-requirements,fits-beam-support,kms-support,alternate-data-backends]
+
+
+# Create virtual environment
+# RUN python3.10 -m venv /opt/ddfacet-env 
+# RUN /opt/ddfacet-env/bin/pip install --upgrade pip setuptools
+# RUN /opt/ddfacet-env/bin/pip install --upgrade pip
+# RUN /opt/ddfacet-env/bin/pip install DDFacet
+# RUN /opt/ddfacet-env/bin/pip install -U pip setuptools wheel
+
+# Install CMake v3.21.7
+# WORKDIR /opt
+# RUN wget https://github.com/Kitware/CMake/releases/download/v3.21.7/cmake-3.21.7.tar.gz && \
+#     tar -xzf cmake-3.21.7.tar.gz && \
+#     cd cmake-3.21.7 && \
+#     ./bootstrap --prefix=/opt/cmake-3.21.7-install && \
+#     make -j$(nproc) && \
+#     make install && \
+#     ln -s /opt/cmake-3.21.7-install/bin/cmake /usr/local/bin/cmake
+
+# RUN cd /opt && git clone https://github.com/saopicc/DDFacet.git
+# RUN cd /opt/DDFacet/ && git submodule update --init --recursive && cd /
+# RUN rm -rf /opt/DDFacet/DDFacet/cbuild
+# RUN . /opt/ddfacet-env/bin/activate && python -m pip install --use-pep517 -U "/opt/DDFacet[dft-support,moresane-support,testing-requirements,fits-beam-support,kms-support,alternate-data-backends]"
+
+
+# Finally install DDFacet
+# RUN rm -rf /opt/DDFacet/DDFacet/cbuild
+# RUN . /opt/ddfacet-env/bin/activate && python -m pip install tensorflow-cpu
+# RUN . /opt/ddfacet-env/bin/activate && python -m pip install --use-pep517 -U "/opt/DDFacet[dft-support,moresane-support,testing-requirements,fits-beam-support,kms-support,alternate-data-backends]"
+# RUN pip3 install -U pip setuptools wheel
+# RUN python3.10 -m pip install tensorflow-cpu
+
+# Force numba <0.55 otherwise it breaks for numpy
+# RUN pip3 install numba==0.54.1
+# Force ipython not to be upgraded too much otherwise we lose compatibility with come astropy
+# RUN pip3 install ipython==7.17.0
+
+# RUN python3.10 -m pip install "setuptools<60"
+# RUN apt-get update && apt-get install -y \
+#     build-essential \
+#     python3-dev \
+#     libfftw3-dev \
+#     cython3 \
+#     git \
+#     pkg-config
+# RUN python3.10 -m pip install cython numpy
+# RUN python3.10 -m pip install -U "/opt/DDFacet/[moresane-support,testing-requirements,fits-beam-support]"
+# RUN cd /opt/DDFacet/ && python3 setup.py build
+# RUN cd /opt/DDFacet/ && python3 setup.py install
+
+# Set MeqTrees Cattery path to installation directory
+# ENV MEQTREES_CATTERY_PATH /usr/local/lib/python3.10/dist-packages/Cattery/
+# ENV PYTHONPATH $MEQTREES_CATTERY_PATH:$PYTHONPATH
 
 #####################################################################
 
