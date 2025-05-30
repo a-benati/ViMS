@@ -2,7 +2,7 @@
 
 #from utils import utils, log
 import glob
-from ViMS.ViMS.utils import utils
+from utils import utils
 
 
 ################################### Helper functions ####################################
@@ -110,7 +110,7 @@ def quartical_template2(logger, obs_id, target, path, solint='60s'):
 ############################ Execution functions ######################################
 
 
-def run(logger, obs_id, cal_ms, path):
+def run(logger, obs_id, targets, path):
     logger.info("")
     logger.info("")
     logger.info("###########################################################")
@@ -119,11 +119,36 @@ def run(logger, obs_id, cal_ms, path):
     logger.info("")
     logger.info("")
 
-    cmd = f"facetselfcal -h"
-    stdout, stderr = utils.run_command(cmd)
-    logger.info(stdout)
-    if stderr:
-        logger.error(f"Error in facetselfcal: {stderr}")
+    for target in targets:
+        try:
+            ms_matches = glob.glob(f"{path}/MS_FILES/{obs_id}*{target}-avg.ms")
+            if not ms_matches:
+                logger.warning(f"No MS file found for target {target}")
+                continue
+            ms = ms_matches[0]
+            logger.info(f"Found MS file for {target}: {ms}")
+            
+            logger.info(f"Running selfcal for target {target}")
+            
+            cmd = f"""facetselfcal -i {path}/{obs_id}_{target}_selfcal --noarchive --forwidefield \
+            --soltype-list="['scalarphase', 'scalarcomplexgain']" \
+            --solint-list="['1min','30min']" --nchan-list=[1,1] \
+            --soltypecycles-list=[0,2] --smoothnessconstraint-list=[100.,50.] \
+            --imsize=12000 --pixelsize=2. --channelsout=12 --niter=50000 \
+            --paralleldeconvolution=1024 --start=0 --stop=4 --multiscale --clipsolutions \
+            --multiscale-start=0 --parallelgridding=4 \
+            {ms}"""
+
+            stdout, stderr = utils.run_command(cmd, logger)
+            logger.info(f"Selfcal output for {target}:\n{stdout}")
+            
+            if stderr:
+                logger.warning(f"Selfcal completed for {target} but with errors:\n{stderr}")
+
+        except IndexError:
+            logger.error(f"No MS file found in glob for target {target}")
+        except Exception as e:
+            logger.exception(f"Unexpected error while processing target {target}: {e}")
 
 
     logger.info("Selfcal step completed successfully!")
@@ -162,7 +187,7 @@ def run_selfcal(logger, obs_id, targets, path):
                 f"-data-column DATA {split_ms}")
             
             logger.info(cmd)
-            stdout, stderr = utils.run_command(cmd)
+            stdout, stderr = utils.run_command(cmd, logger)
             logger.info(stdout)
             if stderr:
                 logger.error(f"Error in WSClean: {stderr}")
@@ -176,7 +201,7 @@ def run_selfcal(logger, obs_id, targets, path):
             mfs_im = f'{path}/TARGET_IMAGES/image_0/{obs_id}_{target}_0-MFS-I-image.fits'
 
             cmd = (f'breizorro --restored-image {mfs_im} --threshold 6.5 --outfile {path}/TARGET_IMAGES/image_0/{obs_id}_{target}_0-mask.fits')
-            stdout, stderr = utils.run_command(cmd)
+            stdout, stderr = utils.run_command(cmd, logger)
             logger.info(stdout)
             if stderr:
                 logger.error(f"Error in Breizorro: {stderr}")
@@ -195,7 +220,7 @@ def run_selfcal(logger, obs_id, targets, path):
                 "-squared-channel-joining -join-polarizations -fit-spectral-pol 4 -multiscale  -multiscale-scales 0,2,3,6 -multiscale-scale-bias 0.75 "
                 "-parallel-deconvolution 1000 -parallel-gridding 1 -channel-range 0 2296 -nwlayers-factor 3 -minuvw-m 40 -no-mf-weighting -weighting-rank-filter 3 "
                 f"-data-column DATA {split_ms}")
-            stdout, stderr = utils.run_command(cmd)
+            stdout, stderr = utils.run_command(cmd, logger)
             logger.info(stdout)
             if stderr:
                 logger.error(f"Error in WSClean: {stderr}")
@@ -208,7 +233,7 @@ def run_selfcal(logger, obs_id, targets, path):
             template = quartical_template(logger, obs_id, target, path)
             logger.info('SELFCAL: Quartical template created successfully!')
             cmd = f'goquartical {template}'
-            stdout, stderr = utils.run_command(cmd)
+            stdout, stderr = utils.run_command(cmd, logger)
             logger.info(stdout)
             if stderr:
                 logger.error(f"Error in Quartical: {stderr}")
@@ -223,7 +248,7 @@ def run_selfcal(logger, obs_id, targets, path):
             mfs_im = f'{path}/TARGET_IMAGES/image_1/{obs_id}_{target}_1-MFS-I-image.fits'
 
             cmd = (f'breizorro --restored-image {mfs_im} --threshold 6.5 --outfile {path}/TARGET_IMAGES/image_1/{obs_id}_{target}_1-mask.fits')
-            stdout, stderr = utils.run_command(cmd)
+            stdout, stderr = utils.run_command(cmd, logger)
             logger.info(stdout)
             if stderr:
                 logger.error(f"Error in Breizorro: {stderr}")
@@ -242,7 +267,7 @@ def run_selfcal(logger, obs_id, targets, path):
                 "-squared-channel-joining -join-polarizations -fit-spectral-pol 4 -multiscale  -multiscale-scales 0,2,3,6 -multiscale-scale-bias 0.75 "
                 "-parallel-deconvolution 1000 -parallel-gridding 1 -channel-range 0 2296 -nwlayers-factor 3 -minuvw-m 40 -no-mf-weighting -weighting-rank-filter 3 "
                 f" -data-column CORRECTED_DATA {split_ms}")
-            stdout, stderr = utils.run_command(cmd)
+            stdout, stderr = utils.run_command(cmd, logger)
             logger.info(stdout)
             if stderr:
                 logger.error(f"Error in WSClean: {stderr}")
@@ -255,7 +280,7 @@ def run_selfcal(logger, obs_id, targets, path):
             template = quartical_template(logger, obs_id, target, path, run=2, solint='120s', data_column='CORRECTED_DATA')
             logger.info('SELFCAL: Quartical template created successfully!')
             cmd = (f'goquartical {template}')
-            stdout, stderr = utils.run_command(cmd)
+            stdout, stderr = utils.run_command(cmd, logger)
             logger.info(stdout)
             if stderr:
                 logger.error(f"Error in Quartical: {stderr}")
@@ -270,7 +295,7 @@ def run_selfcal(logger, obs_id, targets, path):
             mfs_im = f'{path}/TARGET_IMAGES/image_2/{obs_id}_{target}_2-MFS-I-image.fits'
 
             cmd = (f'breizorro --restored-image {mfs_im} --threshold 4 --outfile {path}/TARGET_IMAGES/image_2/{obs_id}_{target}_2-mask.fits')
-            stdout, stderr = utils.run_command(cmd)
+            stdout, stderr = utils.run_command(cmd, logger)
             logger.info(stdout)
             if stderr:
                 logger.error(f"Error in Breizorro: {stderr}")
@@ -289,7 +314,7 @@ def run_selfcal(logger, obs_id, targets, path):
                 "-squared-channel-joining -join-polarizations -fit-spectral-pol 4 -multiscale  -multiscale-scales 0,2,3,6 -multiscale-scale-bias 0.75 "
                 "-parallel-deconvolution 1000 -parallel-gridding 1 -channel-range 0 2296 -nwlayers-factor 3 -minuvw-m 40 -no-mf-weighting -weighting-rank-filter 3 "
                 f"-data-column CORRECTED_DATA {split_ms}")
-            stdout, stderr = utils.run_command(cmd)
+            stdout, stderr = utils.run_command(cmd, logger)
             logger.info(stdout)
             if stderr:
                 logger.error(f"Error in WSClean: {stderr}")
@@ -303,7 +328,7 @@ def run_selfcal(logger, obs_id, targets, path):
             template = quartical_template2(logger, obs_id, target, path)
             logger.info('SELFCAL: Quartical template created successfully!')
             cmd = (f'goquartical {template}')
-            stdout, stderr = utils.run_command(cmd)
+            stdout, stderr = utils.run_command(cmd, logger)
             logger.info(stdout)
             if stderr:
                 logger.error(f"Error in Quartical: {stderr}")
@@ -318,7 +343,7 @@ def run_selfcal(logger, obs_id, targets, path):
             mfs_im = f'{path}/TARGET_IMAGES/image_3/{obs_id}_{target}_3-MFS-I-image.fits'
 
             cmd = (f'breizorro --restored-image {mfs_im} --threshold 3 --outfile {path}/TARGET_IMAGES/image_3/{obs_id}_{target}_3-mask.fits')
-            stdout, stderr = utils.run_command(cmd)
+            stdout, stderr = utils.run_command(cmd, logger)
             logger.info(stdout)
             if stderr:
                 logger.error(f"Error in Breizorro: {stderr}")
@@ -337,7 +362,7 @@ def run_selfcal(logger, obs_id, targets, path):
                 "-squared-channel-joining -join-polarizations -fit-spectral-pol 4 -multiscale  -multiscale-scales 0,2,3,6 -multiscale-scale-bias 0.75 "
                 "-parallel-deconvolution 1000 -parallel-gridding 1 -channel-range 0 2296 -nwlayers-factor 3 -minuvw-m 40 -no-mf-weighting -weighting-rank-filter 3 "
                 f"-data-column CORRECTED_DATA {split_ms}")
-            stdout, stderr = utils.run_command(cmd)
+            stdout, stderr = utils.run_command(cmd, logger)
             logger.info(stdout)
             if stderr:
                 logger.error(f"Error in WSClean: {stderr}")

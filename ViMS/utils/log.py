@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
 
 import logging
-import os, io, sys
+import os
 import glob, time
 import subprocess
-import tempfile
-import contextlib
 from datetime import datetime
 from utils.client_script import append_log, initialize_google_docs, upload_plot, update_cell
+from casatasks import casalog
 
 class Logger:
     """
@@ -38,18 +37,39 @@ class Logger:
     def get_log_filepath(self):
         return self.log_filepath
     
-def delete_old_casa_logs():
+def delete_old_logs():
     """
     Find and delete old CASA log files.
     """
     casa_log_pattern = os.getcwd() + "/casa*.log"
-    log_files = glob.glob(casa_log_pattern)
+    tricolour_log_pattern = os.getcwd() + "/tricolour*.log"
+    casa_log_files = glob.glob(casa_log_pattern)
+    tricolour_log_files = glob.glob(tricolour_log_pattern)
     
-    for file in log_files:
+    for file in casa_log_files:
         try:
             os.remove(file)
         except Exception as e:
             print(f"Failed to delete CASA log file {file}: {e}")
+
+    for file in tricolour_log_files:
+        try:
+            os.remove(file)
+        except Exception as e:
+            print(f"Failed to delete Tricolour log file {file}: {e}")
+
+def set_casa_log(logger, casa_log_file="casa.log"):
+    """
+    Set the CASA log file.
+    
+    Args:
+        logger: The logger instance of the pipeline.
+        casa_log_file: The name of the CASA log file to use.
+    """
+    try:
+        casalog.setlogfile(casa_log_file)
+    except Exception as e:
+        logger.error(f"Failed to set CASA log file: {e}")
 
 def redirect_casa_log(logger, delay=1.0):
     """
@@ -60,7 +80,7 @@ def redirect_casa_log(logger, delay=1.0):
         logger: The logger instance of the pipeline.
         delay: Seconds to wait before reading the file (in case CASA is still writing).
     """
-    casa_logs = glob.glob("casa-*.log")
+    casa_logs = glob.glob("casa*.log")
     if not casa_logs:
         logger.warning("No CASA log file found.")
         return

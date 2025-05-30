@@ -133,7 +133,7 @@ def average_cal(logger, cal_ms, path, nchan=512):
             cmd = f"rm -r {pol_ms_avg} && rm -r {pol_ms_avg}.flagversions"
 
 
-            stdout, stderr = utils.run_command(cmd)
+            stdout, stderr = utils.run_command(cmd, logger)
             logger.info(stdout)
             if stderr:
                 logger.error(f"Error in deletin ms file: {stderr}")
@@ -177,7 +177,7 @@ def average_cal(logger, cal_ms, path, nchan=512):
 
             cmd = f"rm -r {flux_ms_avg} && rm -r {flux_ms_avg}.flagversions"
 
-            stdout, stderr = utils.run_command(cmd)
+            stdout, stderr = utils.run_command(cmd, logger)
             logger.info(stdout)
             if stderr:
                 logger.error(f"Error in deletin ms file: {stderr}")
@@ -305,21 +305,21 @@ def average_targets(logger, obs_id, targets, path, nchan=512, force=False):
             logger.info(f'Forcing recreation of target ms file {split_ms_avg}')
             chanbin = round(nchan_tar/nchan)
 
-            cmd = f"rm -r {split_ms} && rm -r {split_ms}.flagversions"
-
-            stdout, stderr = utils.run_command(cmd)
-            logger.info(stdout)
-            if stderr:
-                logger.error(f"Error in deleting ms file: {stderr}")
-
             mstransform(vis=split_ms,outputvis=split_ms_avg,createmms=False,\
                     separationaxis="auto",numsubms="auto",tileshape=[0],field=target,spw="",scan="",antenna="", correlation="",timerange="",intent="",\
                     array="",uvrange="",observation="",feed="",datacolumn="data",realmodelcol=False,keepflags=True,\
                     usewtspectrum=True,combinespws=False,chanaverage=True,chanbin=chanbin,hanning=False, regridms=False,mode="channel",nchan=-1,start=0,width=1,\
-                    nspw=1,interpolation="linear",phasecenter="",restfreq="",outframe="",veltype="radio",preaverage=False,timeaverage=False,timebin="",\
+                    nspw=1,interpolation="linear",phasecenter="",restfreq="",outframe="",veltype="radio",preaverage=False,timeaverage=True,timebin="16s",\
                     timespan="",maxuvwdistance=0.0,docallib=True, callib=cal_lib(logger, obs_id, target, path),\
                     douvcontsub=False,fitspw="",fitorder=0,want_cont=False,denoising_lib=True,nthreads=1,niter=1,disableparallel=False,ddistart=-1,taql="",\
                     monolithic_processing=False,reindex=True)
+            
+            cmd = f"rm -r {split_ms} && rm -r {split_ms}.flagversions"
+
+            stdout, stderr = utils.run_command(cmd, logger)
+            logger.info(stdout)
+            if stderr:
+                logger.error(f"Error in deleting ms file: {stderr}")
         
             cal_size = file_size(split_ms_avg)
             space_left = free_space(f'{path}')
@@ -342,7 +342,7 @@ def average_targets(logger, obs_id, targets, path, nchan=512, force=False):
 
                 cmd = f"rm -r {split_ms} && rm -r {split_ms}.flagversions"
 
-                stdout, stderr = utils.run_command(cmd)
+                stdout, stderr = utils.run_command(cmd, logger)
                 logger.info(stdout)
                 if stderr:
                     logger.error(f"Error in deleting ms file: {stderr}")
@@ -390,7 +390,7 @@ def ionosphere_corr_target(logger, obs_id, targets, new_ms, path):
     from spinifex.vis_tools import ms_tools
     from utils import utils
     """
-    Calculate the ionospheric RM for the target fields and apply it as an claibration table to the data.
+    Calculate the ionospheric RM for the target fields and apply it as a claibration table to the data.
     """
     for target, new in zip(targets, new_ms):
         if new == True:
@@ -410,7 +410,7 @@ def ionosphere_corr_target(logger, obs_id, targets, new_ms, path):
             logger.info(f"ionosphere_rm: Created h5parm file {h5parm_name} with ionospheric RM.")
 
             cmd = f"DP3 msin={target_avg} msout=. msin.datacolumn=DATA msout.datacolumn=DATA steps=[cor] cor.type=correct cor.parmdb={h5parm_name} cor.correction=rotationmeasure000 cor.invert=True"
-            stdout, stderr = utils.run_command(cmd)
+            stdout, stderr = utils.run_command(cmd, logger)
             logger.info(stdout)
             if stderr:
                 logger.error(f"Error in DP3: {stderr}")

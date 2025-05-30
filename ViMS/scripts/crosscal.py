@@ -311,7 +311,7 @@ def crosscal(logger, obs_id, cal_ms, pol_ms, path, ref_ant='m000'):
     h5parm = ionosphere_rm(logger, pol_ms, obs_id, path)
 
     cmd = f"DP3 msin={pol_ms} msout=. msin.datacolumn=MODEL_DATA msout.datacolumn=MODEL_DATA steps=[cor] cor.type=correct cor.parmdb={h5parm} cor.correction=rotationmeasure000 cor.invert=False"
-    stdout, stderr = utils.run_command(cmd)
+    stdout, stderr = utils.run_command(cmd, logger)
     logger.info(stdout)
     if stderr:
         logger.error(f"Error in DP3: {stderr}")
