@@ -120,15 +120,15 @@ for obs_id in obs_ids:
     ##########################################################
     ####################### APPLY CAL ########################
     ##########################################################
-    # if current_step <= 5:
-    #     new_ms = ms_prep.average_targets(logger, obs_id, targets, output_dir, force=True)
-    #     ms_prep.ionosphere_corr_target(logger, obs_id, targets, new_ms, output_dir)
+    if current_step <= 5:
+        new_ms = ms_prep.average_targets(logger, obs_id, targets, output_dir, force=True)
+        ms_prep.ionosphere_corr_target(logger, obs_id, targets, new_ms, output_dir)
 
     ##########################################################
     ######################## SELFCAL #########################
     ##########################################################
-    # if current_step <= 6:
-    #     selfcal.run(logger, obs_id, targets, output_dir)
+    if current_step <= 6:
+        selfcal.run(logger, obs_id, targets, output_dir)
     
     # Log the obs footer
     log.log_obs_footer(logger, obs_id)
