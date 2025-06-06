@@ -277,7 +277,7 @@ def split_targets(logger, obs_id, full_ms, path):
 #----------------------------------------------------------------------------------------------------------------
 
 def average_targets(logger, obs_id, targets, path, nchan=512, force=False):
-    from casatasks import mstransform
+    from casatasks import mstransform, applycal
     from casatools import msmetadata
     import glob
     from utils import utils
@@ -304,6 +304,13 @@ def average_targets(logger, obs_id, targets, path, nchan=512, force=False):
 
         if force == True and os.path.isdir(split_ms_avg):
             logger.info(f'Forcing recreation of target ms file {split_ms_avg}')
+
+            cmd = f"rm -r {split_ms_avg}"
+            stdout, stderr = utils.run_command(cmd, logger)
+            logger.info(stdout)
+            if stderr:
+                logger.error(f"Error in deleting ms file: {stderr}")
+                
             chanbin = round(nchan_tar/nchan)
 
             cmd = f"rm -r {split_ms_avg} && rm -r {split_ms_avg}.flagversions"

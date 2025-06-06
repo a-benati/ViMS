@@ -107,8 +107,9 @@ for obs_id in obs_ids:
     ##########################################################
     ###################### FLAG TARGET #######################
     ##########################################################
-    #targets = ['virgo064', 'virgo081', 'virgo084', 'virgo101', 'virgo102']
+    # Split the full ms file into target ms files
     targets = ms_prep.split_targets(logger, obs_id, full_ms, output_dir)
+
     if current_step <= 4:
         # Split the full ms file into target ms files
         # targets = ['virgo064', 'virgo081', 'virgo084', 'virgo101', 'virgo102']
