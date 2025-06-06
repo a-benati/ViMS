@@ -121,6 +121,7 @@ def run(logger, obs_id, targets, path):
 
     for target in targets:
         try:
+            # ms_matches = glob.glob(f"{path}/MS_FILES/{obs_id}*{target}-avg.ms")
             ms_matches = glob.glob(f"{path}/MS_FILES/{obs_id}*{target}-avg.ms")
             if not ms_matches:
                 logger.warning(f"No MS file found for target {target}")
@@ -138,6 +139,18 @@ def run(logger, obs_id, targets, path):
             --paralleldeconvolution=1024 --start=0 --stop=4 --multiscale --clipsolutions \
             --multiscale-start=0 --parallelgridding=4 \
             {ms}"""
+
+            # cmd = f"""wsclean -no-update-model-required -minuv-l 80.0 -size 12000 12000 -scale 2.0arcsec \
+            #     -reorder -weight briggs -0.5 -parallel-reordering 4 -mgain 0.75 \
+            #     -data-column DATA -join-channels -channels-out 12 \
+            #     -parallel-deconvolution 1024 -parallel-gridding 4 -auto-mask 2.5 \
+            #     -auto-threshold 0.5 -multiscale \
+            #     -multiscale-max-scales 11 -save-source-list \
+            #     -fit-spectral-pol 3 -pol i -baseline-averaging 0.8181230868723419 \
+            #     -gridder wgridder -wgridder-accuracy 0.0001 -no-min-grid-resolution \
+            #     -name /beegfs/bbf4346/OUTPUT/obs26/wsclean/{obs_id}_{target}_wsclean \
+            #     -nmiter 12 -niter 50000 \
+            #     {ms}"""
 
             stdout, stderr = utils.run_command(cmd, logger)
             logger.info(f"Selfcal output for {target}:\n{stdout}")

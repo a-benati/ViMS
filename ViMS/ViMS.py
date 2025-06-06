@@ -107,12 +107,10 @@ for obs_id in obs_ids:
     ##########################################################
     ###################### FLAG TARGET #######################
     ##########################################################
-    targets = ['virgo064', 'virgo081', 'virgo084', 'virgo101', 'virgo102']
-    if current_step <= 4:
-        # Split the full ms file into target ms files
-        # targets = ['virgo064', 'virgo081', 'virgo084', 'virgo101', 'virgo102']
-        # targets = ms_prep.split_targets(logger, obs_id, full_ms, output_dir)
+    # Split the full ms file into target ms files
+    targets = ms_prep.split_targets(logger, obs_id, full_ms, output_dir)
 
+    if current_step <= 4:
         # swap the feeds of the target ms files, will skip automatically if already exists, then flag them
         for target in targets:
             split_ms = glob.glob(f"{ms_dir}/*{target}.ms")[0]
@@ -122,16 +120,15 @@ for obs_id in obs_ids:
     ##########################################################
     ####################### APPLY CAL ########################
     ##########################################################
-    if current_step <= 5:
-        #cal_ms.cal_lib(obs_id, logger, "J1939-6342", output_dir)
-        new_ms = ms_prep.average_targets(logger, obs_id, targets, output_dir, force=True)
-        ms_prep.ionosphere_corr_target(logger, obs_id, targets, new_ms, output_dir)
+    # if current_step <= 5:
+    #     new_ms = ms_prep.average_targets(logger, obs_id, targets, output_dir, force=True)
+    #     ms_prep.ionosphere_corr_target(logger, obs_id, targets, new_ms, output_dir)
 
     ##########################################################
     ######################## SELFCAL #########################
     ##########################################################
-    if current_step <= 6:
-        selfcal.run(logger, obs_id, targets, output_dir)
+    # if current_step <= 6:
+    #     selfcal.run(logger, obs_id, targets, output_dir)
     
     # Log the obs footer
     log.log_obs_footer(logger, obs_id)
