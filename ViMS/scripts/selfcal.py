@@ -3,7 +3,8 @@
 #from utils import utils, log
 import glob
 from utils import utils
-
+from casatools import msmetadata
+import numpy as np
 
 ################################### Helper functions ####################################
 
@@ -13,7 +14,7 @@ def quartical_template(logger, obs_id, target, path, run=1, solint='300s', data_
     Create a quartical selfcalibration template for each target.
     Only phase and delay calibration.
     """
-    split_ms = glob.glob(f"{path}/MS_FILES/{obs_id}_*{target}*.ms")[0]
+    split_ms = glob.glob(f"{path}/MS_FILES/{obs_id}_*{target}-avg*.ms")[0]
     
     template = f'''
       input_ms:
@@ -65,7 +66,7 @@ def quartical_template2(logger, obs_id, target, path, solint='60s'):
     Create a quartical selfcalibration template for each target.
     Complex phase and amplitude calibration.
     """
-    split_ms = glob.glob(f"{path}/MS_FILES/{obs_id}_*{target}*.ms")[0]
+    split_ms = glob.glob(f"{path}/MS_FILES/{obs_id}_*{target}-avg*.ms")[0]
     
     template = f'''
       input_ms:
@@ -130,11 +131,11 @@ def run(logger, obs_id, targets, path):
             
             logger.info(f"Running selfcal for target {target}")
             
-            cmd = f"""facetselfcal -i {path}/{obs_id}_{target}_selfcal --noarchive --forwidefield \
+            cmd = f"""facetselfcal -i {path}/SELFCAL_PRODUCTS/{obs_id}_{target}_selfcal --noarchive --forwidefield \
             --soltype-list="['scalarphase', 'scalarcomplexgain']" \
             --solint-list="['1min','30min']" --nchan-list=[1,1] \
             --soltypecycles-list=[0,2] --smoothnessconstraint-list=[100.,50.] \
-            --imsize=12000 --pixelsize=2. --channelsout=12 --niter=50000 \
+            --imsize=6000 --pixelsize=2. --channelsout=12 --niter=50000 \
             --paralleldeconvolution=1024 --start=0 --stop=4 --multiscale --clipsolutions \
             --multiscale-start=0 --parallelgridding=4 \
             {ms}"""
@@ -171,7 +172,7 @@ def run_selfcal(logger, obs_id, targets, path):
     logger.info("")
 
     for target in targets:
-        split_ms = glob.glob(f"{path}/MS_FILES/{obs_id}_*{target}*.ms")[0]
+        split_ms = glob.glob(f"{path}/MS_FILES/{obs_id}_*{target}-avg*.ms")[0]
         logger.info(f"found {target} ms file: {split_ms}")
         logger.info(f'Running selfcal for target {target}')
 
@@ -179,11 +180,18 @@ def run_selfcal(logger, obs_id, targets, path):
             logger.info('\n\n\n\n\n')
             logger.info('SELFCAL: running WSClean (initial)....')
             im_name = f'{path}/TARGET_IMAGES/image_0/{obs_id}_{target}_0'
+            
+            
+            msmd = msmetadata()
+            msmd.open(split_ms)
+            chan_width = np.mean(msmd.chanwidths(0))*1e-3 # convert to MHz
+            msmd.close()
+            cutoff = int((1380 - 900)/chan_width)
 
             cmd = (f"wsclean -name {im_name} -size 2760 2760 -scale 1.9asec -mgain 0.8 -niter 1000000 -auto-threshold 2 -auto-mask 6 "
                 "-pol iquv -weight briggs 0.0 -j 32 -abs-mem 100.0 -channels-out 5 -join-channels -gridder wgridder "
                 "-squared-channel-joining -join-polarizations -fit-spectral-pol 4 -multiscale  -multiscale-scales 0,2,3,6 -multiscale-scale-bias 0.75 "
-                "-parallel-deconvolution 1000 -parallel-gridding 1 -channel-range 0 2296 -nwlayers-factor 3 -minuvw-m 40 -no-mf-weighting -weighting-rank-filter 3 "
+                f"-parallel-deconvolution 1000 -parallel-gridding 1 -channel-range 0 {cutoff} -nwlayers-factor 3 -minuvw-m 40 -no-mf-weighting -weighting-rank-filter 3 "
                 f"-data-column DATA {split_ms}")
             
             logger.info(cmd)
@@ -217,8 +225,8 @@ def run_selfcal(logger, obs_id, targets, path):
 
             cmd = (f"wsclean -name {im_name} -size 2760 2760 -scale 1.9asec -mgain 0.8 -niter 1000000 -auto-threshold 2 -fits-mask {mask_name} "
                 "-pol iquv -weight briggs 0.0 -j 32 -abs-mem 100.0 -channels-out 5 -join-channels -gridder wgridder "
-                "-squared-channel-joining -join-polarizations -fit-spectral-pol 4 -multiscale  -multiscale-scales 0,2,3,6 -multiscale-scale-bias 0.75 "
-                "-parallel-deconvolution 1000 -parallel-gridding 1 -channel-range 0 2296 -nwlayers-factor 3 -minuvw-m 40 -no-mf-weighting -weighting-rank-filter 3 "
+                "-squared-channel-joining -join-polarizations -fit-spectral-pol 4 -multiscale  -multiscale-scales 0,2,3,5 -multiscale-scale-bias 0.75 "
+                f"-parallel-deconvolution 1000 -parallel-gridding 1 -channel-range 0 {cutoff} -nwlayers-factor 3 -minuvw-m 40 -no-mf-weighting -weighting-rank-filter 3 "
                 f"-data-column DATA {split_ms}")
             stdout, stderr = utils.run_command(cmd, logger)
             logger.info(stdout)
@@ -264,8 +272,8 @@ def run_selfcal(logger, obs_id, targets, path):
 
             cmd = (f"wsclean -name {im_name} -size 2760 2760 -scale 1.9asec -mgain 0.8 -niter 1000000 -auto-threshold 1 -fits-mask {mask_name} "
                 "-pol iquv -weight briggs 0.0 -j 32 -abs-mem 100.0 -channels-out 5 -join-channels -gridder wgridder "
-                "-squared-channel-joining -join-polarizations -fit-spectral-pol 4 -multiscale  -multiscale-scales 0,2,3,6 -multiscale-scale-bias 0.75 "
-                "-parallel-deconvolution 1000 -parallel-gridding 1 -channel-range 0 2296 -nwlayers-factor 3 -minuvw-m 40 -no-mf-weighting -weighting-rank-filter 3 "
+                "-squared-channel-joining -join-polarizations -fit-spectral-pol 4 -multiscale  -multiscale-scales 0,2,3,5 -multiscale-scale-bias 0.75 "
+                f"-parallel-deconvolution 1000 -parallel-gridding 1 -channel-range 0 {cutoff} -nwlayers-factor 3 -minuvw-m 40 -no-mf-weighting -weighting-rank-filter 3 "
                 f" -data-column CORRECTED_DATA {split_ms}")
             stdout, stderr = utils.run_command(cmd, logger)
             logger.info(stdout)
@@ -311,8 +319,8 @@ def run_selfcal(logger, obs_id, targets, path):
 
             cmd = (f"wsclean -name {im_name} -size 2760 2760 -scale 1.9asec -mgain 0.8 -niter 1000000 -auto-threshold 1 -fits-mask {mask_name} "
                 "-pol iquv -weight briggs 0.0 -j 32 -abs-mem 100.0 -channels-out 5 -join-channels -gridder wgridder "
-                "-squared-channel-joining -join-polarizations -fit-spectral-pol 4 -multiscale  -multiscale-scales 0,2,3,6 -multiscale-scale-bias 0.75 "
-                "-parallel-deconvolution 1000 -parallel-gridding 1 -channel-range 0 2296 -nwlayers-factor 3 -minuvw-m 40 -no-mf-weighting -weighting-rank-filter 3 "
+                "-squared-channel-joining -join-polarizations -fit-spectral-pol 4 -multiscale  -multiscale-scales 0,2,3,5 -multiscale-scale-bias 0.75 "
+                f"-parallel-deconvolution 1000 -parallel-gridding 1 -channel-range 0 {cutoff} -nwlayers-factor 3 -minuvw-m 40 -no-mf-weighting -weighting-rank-filter 3 "
                 f"-data-column CORRECTED_DATA {split_ms}")
             stdout, stderr = utils.run_command(cmd, logger)
             logger.info(stdout)
@@ -359,8 +367,8 @@ def run_selfcal(logger, obs_id, targets, path):
 
             cmd = (f"wsclean -name {im_name} -size 2760 2760 -scale 1.9asec -mgain 0.8 -niter 1000000 -auto-threshold 1 -fits-mask {mask_name} "
                 "-pol iquv -weight briggs 0.0 -j 32 -abs-mem 100.0 -channels-out 5 -join-channels -gridder wgridder "
-                "-squared-channel-joining -join-polarizations -fit-spectral-pol 4 -multiscale  -multiscale-scales 0,2,3,6 -multiscale-scale-bias 0.75 "
-                "-parallel-deconvolution 1000 -parallel-gridding 1 -channel-range 0 2296 -nwlayers-factor 3 -minuvw-m 40 -no-mf-weighting -weighting-rank-filter 3 "
+                "-squared-channel-joining -join-polarizations -fit-spectral-pol 4 -multiscale  -multiscale-scales 0,2,3,5 -multiscale-scale-bias 0.75 "
+                f"-parallel-deconvolution 1000 -parallel-gridding 1 -channel-range 0 {cutoff} -nwlayers-factor 3 -minuvw-m 40 -no-mf-weighting -weighting-rank-filter 3 "
                 f"-data-column CORRECTED_DATA {split_ms}")
             stdout, stderr = utils.run_command(cmd, logger)
             logger.info(stdout)

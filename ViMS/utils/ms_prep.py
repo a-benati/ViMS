@@ -14,19 +14,21 @@ def free_space(path):
     gb = (1024*1024*1024)
     return (total/gb, used/gb, free/gb)
 
-def cal_lib(logger, obs_id, target, path):
+def cal_lib(logger, obs_id, path):
     """
     create a library containing all the crosscal calibration tables.
     Used for OTF calibration in mstransform (does not contain any gaintables)
     """
     logger.info('Collect calibration tables applied to target fields')
     tables = [
-        f'caltable="{path}/CAL_TABLES/{obs_id}_calib.kcal2" calwt=False tinterp="nearest" finterp="linear" fldmap="nearest" field="{target}" spwmap=0',
-        f'caltable="{path}/CAL_TABLES/{obs_id}_calib.bandpass2" calwt=False tinterp="nearest" finterp="linear" fldmap="nearest" field="{target}" spwmap=0',
-        f'caltable="{path}/CAL_TABLES/{obs_id}_calib.T.sec" calwt=False tinterp="nearest" finterp="linear" fldmap="nearest" field="{target}" spwmap=0',
-        f'caltable="{path}/CAL_TABLES/{obs_id}_calib.df2" calwt=False tinterp="nearest" finterp="linear" fldmap="nearest" field="{target}" spwmap=0',
-        f'caltable="{path}/CAL_TABLES/{obs_id}_calib.kcrosscal" calwt=False tinterp="nearest" finterp="linear" fldmap="nearest" field="{target}" spwmap=0',
-        f'caltable="{path}/CAL_TABLES/{obs_id}_calib.xf.ambcorr" calwt=False tinterp="nearest" finterp="linear" fldmap="nearest" field="{target}" spwmap=0',
+        f'caltable="{path}/CAL_TABLES/{obs_id}_calib.kcal.sec" calwt=False tinterp="nearest" finterp="linear" fldmap="nearest" field="" spwmap=0',
+        f'caltable="{path}/CAL_TABLES/{obs_id}_calib.gcal_p.sec" calwt=False tinterp="nearest" finterp="linear" fldmap="nearest" field="" spwmap=0',
+        f'caltable="{path}/CAL_TABLES/{obs_id}_calib.gcal_a2" calwt=False tinterp="nearest" finterp="linear" fldmap="nearest" field="" spwmap=0',
+        f'caltable="{path}/CAL_TABLES/{obs_id}_calib.bandpass2" calwt=False tinterp="nearest" finterp="linear" fldmap="nearest" field="" spwmap=0',
+        f'caltable="{path}/CAL_TABLES/{obs_id}_calib.T.sec" calwt=False tinterp="nearest" finterp="linear" fldmap="nearest" field="" spwmap=0',
+        f'caltable="{path}/CAL_TABLES/{obs_id}_calib.df2" calwt=False tinterp="nearest" finterp="linear" fldmap="nearest" field="" spwmap=0',
+        f'caltable="{path}/CAL_TABLES/{obs_id}_calib.kcrosscal" calwt=False tinterp="nearest" finterp="linear" fldmap="nearest" field="" spwmap=0',
+        f'caltable="{path}/CAL_TABLES/{obs_id}_calib.xf.ambcorr" calwt=False tinterp="nearest" finterp="linear" fldmap="nearest" field="" spwmap=0',
     ]
 
     lib = open(f'{path}/CAL_TABLES/{obs_id}_calib_tables.txt','w')
@@ -280,11 +282,10 @@ def average_targets(logger, obs_id, targets, path, nchan=512, force=False):
     import glob
     from utils import utils
     """
-    average each target ms file and apply the calibration tables on the fly.
-    The last calibration table applied is an ionospheric RM correction.
+    average each target ms file to the specified number of channels.
+    If the target ms file already exists, it will check if the number of channels is correct.
     """
 
-    redone = []
 
     for target in targets:
         split_ms = glob.glob(f'{path}/MS_FILES/*{target}.ms')[0]
@@ -305,26 +306,26 @@ def average_targets(logger, obs_id, targets, path, nchan=512, force=False):
             logger.info(f'Forcing recreation of target ms file {split_ms_avg}')
             chanbin = round(nchan_tar/nchan)
 
-            mstransform(vis=split_ms,outputvis=split_ms_avg,createmms=False,\
-                    separationaxis="auto",numsubms="auto",tileshape=[0],field=target,spw="",scan="",antenna="", correlation="",timerange="",intent="",\
-                    array="",uvrange="",observation="",feed="",datacolumn="data",realmodelcol=False,keepflags=True,\
-                    usewtspectrum=True,combinespws=False,chanaverage=True,chanbin=chanbin,hanning=False, regridms=False,mode="channel",nchan=-1,start=0,width=1,\
-                    nspw=1,interpolation="linear",phasecenter="",restfreq="",outframe="",veltype="radio",preaverage=False,timeaverage=True,timebin="16s",\
-                    timespan="",maxuvwdistance=0.0,docallib=True, callib=cal_lib(logger, obs_id, target, path),\
-                    douvcontsub=False,fitspw="",fitorder=0,want_cont=False,denoising_lib=True,nthreads=1,niter=1,disableparallel=False,ddistart=-1,taql="",\
-                    monolithic_processing=False,reindex=True)
-            
-            cmd = f"rm -r {split_ms} && rm -r {split_ms}.flagversions"
+            cmd = f"rm -r {split_ms_avg} && rm -r {split_ms_avg}.flagversions"
 
             stdout, stderr = utils.run_command(cmd, logger)
             logger.info(stdout)
             if stderr:
                 logger.error(f"Error in deleting ms file: {stderr}")
+
+            mstransform(vis=split_ms,outputvis=split_ms_avg,createmms=False,\
+                    separationaxis="auto",numsubms="auto",tileshape=[0],field=target,spw="",scan="",antenna="", correlation="",timerange="",intent="",\
+                    array="",uvrange="",observation="",feed="",datacolumn="data",realmodelcol=False,keepflags=True,\
+                    usewtspectrum=True,combinespws=False,chanaverage=True,chanbin=chanbin,hanning=False, regridms=False,mode="channel",nchan=-1,start=0,width=1,\
+                    nspw=1,interpolation="linear",phasecenter="",restfreq="",outframe="",veltype="radio",preaverage=False,timeaverage=True,timebin="16s",\
+                    timespan="",maxuvwdistance=0.0,docallib=False, callib='',\
+                    douvcontsub=False,fitspw="",fitorder=0,want_cont=False,denoising_lib=True,nthreads=1,niter=1,disableparallel=False,ddistart=-1,taql="",\
+                    monolithic_processing=False,reindex=True)
         
             cal_size = file_size(split_ms_avg)
             space_left = free_space(f'{path}')
             logger.info(f'Size of the target file:{cal_size} MB. Space left in target path {path}; {space_left[2]}/{space_left[0]} GB. ({space_left[2]/space_left[0]*100} %)')
-            redone.append(True)
+
         
         elif os.path.isdir(split_ms_avg) and force == False:
             msmd = msmetadata()
@@ -334,7 +335,6 @@ def average_targets(logger, obs_id, targets, path, nchan=512, force=False):
 
             if nchan_in >= nchan -100 and nchan_in <= nchan +100:
                 logger.info(f'Target ms file {split_ms} averaged to {nchan} channels already exists. Skipping averaging step.')
-                redone.append(False)
                 continue
             else:
                 logger.info(f'Target ms file {split_ms} already exists but with different channel number. Recreating...')
@@ -351,15 +351,14 @@ def average_targets(logger, obs_id, targets, path, nchan=512, force=False):
                     separationaxis="auto",numsubms="auto",tileshape=[0],field=target,spw="",scan="",antenna="", correlation="",timerange="",intent="",\
                     array="",uvrange="",observation="",feed="",datacolumn="data",realmodelcol=False,keepflags=True,\
                     usewtspectrum=True,combinespws=False,chanaverage=True,chanbin=chanbin,hanning=False, regridms=False,mode="channel",nchan=-1,start=0,width=1,\
-                    nspw=1,interpolation="linear",phasecenter="",restfreq="",outframe="",veltype="radio",preaverage=False,timeaverage=False,timebin="",\
-                    timespan="",maxuvwdistance=0.0,docallib=True, callib=cal_lib(logger, obs_id, target, path),\
+                    nspw=1,interpolation="linear",phasecenter="",restfreq="",outframe="",veltype="radio",preaverage=False,timeaverage=True,timebin="16s",\
+                    timespan="",maxuvwdistance=0.0,docallib=False, callib='',\
                     douvcontsub=False,fitspw="",fitorder=0,want_cont=False,denoising_lib=True,nthreads=1,niter=1,disableparallel=False,ddistart=-1,taql="",\
                     monolithic_processing=False,reindex=True)
         
                 cal_size = file_size(split_ms_avg)
                 space_left = free_space(f'{path}')
                 logger.info(f'Size of the target file:{cal_size} MB. Space left in target path {path}; {space_left[2]}/{space_left[0]} GB. ({space_left[2]/space_left[0]*100} %)')
-                redone.append(True)
         else:
             logger.info(f'Creating target ms file {split_ms_avg}')
             chanbin = round(nchan_tar/nchan)
@@ -368,53 +367,68 @@ def average_targets(logger, obs_id, targets, path, nchan=512, force=False):
                 separationaxis="auto",numsubms="auto",tileshape=[0],field=target,spw="",scan="",antenna="", correlation="",timerange="",intent="",\
                 array="",uvrange="",observation="",feed="",datacolumn="data",realmodelcol=False,keepflags=True,\
                 usewtspectrum=True,combinespws=False,chanaverage=True,chanbin=chanbin,hanning=False, regridms=False,mode="channel",nchan=-1,start=0,width=1,\
-                nspw=1,interpolation="linear",phasecenter="",restfreq="",outframe="",veltype="radio",preaverage=False,timeaverage=False,timebin="",\
-                timespan="",maxuvwdistance=0.0,docallib=True, callib=cal_lib(logger, obs_id, target, path),\
+                nspw=1,interpolation="linear",phasecenter="",restfreq="",outframe="",veltype="radio",preaverage=False,timeaverage=True,timebin="16s",\
+                timespan="",maxuvwdistance=0.0,docallib=False, callib='',\
                 douvcontsub=False,fitspw="",fitorder=0,want_cont=False,denoising_lib=True,nthreads=1,niter=1,disableparallel=False,ddistart=-1,taql="",\
                 monolithic_processing=False,reindex=True)
         
             cal_size = file_size(split_ms_avg)
             space_left = free_space(f'{path}')
             logger.info(f'Size of the target file:{cal_size} MB. Space left in target path {path}; {space_left[2]}/{space_left[0]} GB. ({space_left[2]/space_left[0]*100} %)')
-            redone.append(True)
     
-    logger.info('Averaged all target ms files and applied calibration tables successfully!')
+    logger.info(f'Averaged target ms file {target} successfully!')
 
-    return redone
 
 #----------------------------------------------------------------------------------------------------------------
 
-def ionosphere_corr_target(logger, obs_id, targets, new_ms, path):
+def apply_cal(logger, obs_id, targets, path):
+    from casatasks import applycal
+    """
+    Apply the calibration tables from cross and polcal to the target fields
+    """
+
+    for target in targets:
+        target_avg = glob.glob(f"{path}/MS_FILES/{obs_id}*{target}-avg.ms")[0]
+        if not os.path.exists(target_avg):
+            logger.error(f"Target ms file {target_avg} does not exist.")
+
+        else:
+            logger.info(f'Applying calibration tables to target {target}')
+            applycal(vis=target_avg, gaintable=[f'{path}/CAL_TABLES/{obs_id}_calib.kcal.sec', f'{path}/CAL_TABLES/{obs_id}_calib.gcal_p.sec',\
+                     f'{path}/CAL_TABLES/{obs_id}_calib.gcal_a2', f'{path}/CAL_TABLES/{obs_id}_calib.bandpass2',f'{path}/CAL_TABLES/{obs_id}_calib.T.sec',\
+                    f'{path}/CAL_TABLES/{obs_id}_calib.df2', f'{path}/CAL_TABLES/{obs_id}_calib.kcrosscal', f'{path}/CAL_TABLES/{obs_id}_calib.xf.ambcorr'], parang=True, flagbackup=False)
+
+        
+        logger.info(f'Successfully applied calibration tables to target {target}')
+
+#----------------------------------------------------------------------------------------------------------------
+
+def ionosphere_corr_target(logger, obs_id, targets, path):
     from pathlib import Path
     from spinifex import h5parm_tools
     from spinifex.vis_tools import ms_tools
     from utils import utils
     """
-    Calculate the ionospheric RM for the target fields and apply it as a claibration table to the data.
+    Calculate the ionospheric RM for the target fields and apply it as a calibration table to the data.
     """
-    for target, new in zip(targets, new_ms):
-        if new == True:
-            logger.info(f'Calculating ionospheric RM for target {target}')
-            target_avg = glob.glob(f"{path}/MS_FILES/{obs_id}*{target}-avg.ms")[0]
+    for target in targets:
+        logger.info(f'Calculating ionospheric RM for target {target}')
+        target_avg = glob.glob(f"{path}/MS_FILES/{obs_id}*{target}-avg.ms")[0]
         
-            ms_path = Path(target_avg)
-            ms_metadata = ms_tools.get_metadata_from_ms(ms_path)
-            ionex_dir = f'{path}/IONEX_DATA'
+        ms_path = Path(target_avg)
+        ms_metadata = ms_tools.get_metadata_from_ms(ms_path)
 
-            rms = ms_tools.get_rm_from_ms(ms_path, use_stations=ms_metadata.station_names)
-            h5parm_name = f"{path}/CAL_TABLES/{obs_id}_{target}.h5parm"
-            if os.path.exists(h5parm_name):
-                os.remove(h5parm_name)
-                logger.info(f"ionosphere_rm: Removed existing h5parm file {h5parm_name}")
-            h5parm_tools.write_rm_to_h5parm(rms=rms, h5parm_name=h5parm_name)
-            logger.info(f"ionosphere_rm: Created h5parm file {h5parm_name} with ionospheric RM.")
+        rms = ms_tools.get_rm_from_ms(ms_path, use_stations=ms_metadata.station_names)
+        h5parm_name = f"{path}/CAL_TABLES/{obs_id}_{target}.h5parm"
+        if os.path.exists(h5parm_name):
+            os.remove(h5parm_name)
+            logger.info(f"ionosphere_rm: Removed existing h5parm file {h5parm_name}")
+        h5parm_tools.write_rm_to_h5parm(rms=rms, h5parm_name=h5parm_name)
+        logger.info(f"ionosphere_rm: Created h5parm file {h5parm_name} with ionospheric RM.")
 
-            cmd = f"DP3 msin={target_avg} msout=. msin.datacolumn=DATA msout.datacolumn=DATA steps=[cor] cor.type=correct cor.parmdb={h5parm_name} cor.correction=rotationmeasure000 cor.invert=True"
-            stdout, stderr = utils.run_command(cmd, logger)
-            logger.info(stdout)
-            if stderr:
-                logger.error(f"Error in DP3: {stderr}")
-        else:
-            logger.info(f'Target {target} ms file is already corrected for ionospheric RM. Will not be reprocessed.')
-            continue
+        cmd = f"DP3 msin={target_avg} msout=. msin.datacolumn=CORRECTED_DATA msout.datacolumn=CORRECTED_DATA steps=[cor] cor.type=correct cor.parmdb={h5parm_name} cor.correction=rotationmeasure000 cor.invert=True"
+        stdout, stderr = utils.run_command(cmd, logger)
+        logger.info(stdout)
+        if stderr:
+            logger.error(f"Error in DP3: {stderr}")
  

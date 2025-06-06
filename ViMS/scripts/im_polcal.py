@@ -517,9 +517,9 @@ def plot_results(obs_id, logger, path):
 
         #correct rotation measure value for ionospheric contribution
         if name == 'Rotation measure':
-            #ionospheric_rm = ionospheric_RM(obs_id, cal_ms, path)
-            #weighted_mean_ioncorr = weighted_mean - ionospheric_rm
-            #mean_value_ioncorr = mean_value - ionospheric_rm
+            ionospheric_rm = ionospheric_RM(obs_id, cal_ms, path)
+            weighted_mean_ioncorr = weighted_mean - ionospheric_rm
+            mean_value_ioncorr = mean_value - ionospheric_rm
 
             im = ax.imshow(i, origin='lower', cmap='viridis', interpolation='none', vmin=min, vmax=max)
             ax.set_xlabel('RA')
@@ -527,8 +527,8 @@ def plot_results(obs_id, logger, path):
             ax.set_title(name)
 
             cutout_regions[0].plot(ax=ax, lw=2)
-            ax.text(0.5, 0.9, f" weighted mean: {weighted_mean:.3f}", color='black', fontsize=10, transform=ax.transAxes, bbox=dict(facecolor='white'))
-            ax.text(0.05, 0.9, f"Mean: {mean_value:.3f}", color='black', fontsize=10, transform=ax.transAxes, bbox=dict(facecolor='white', alpha=0.7))
+            ax.text(0.5, 0.9, f" weighted mean: {weighted_mean_ioncorr:.3f}", color='black', fontsize=10, transform=ax.transAxes, bbox=dict(facecolor='white'))
+            ax.text(0.05, 0.9, f"Mean: {mean_value_ioncorr:.3f}", color='black', fontsize=10, transform=ax.transAxes, bbox=dict(facecolor='white', alpha=0.7))
             cbar = plt.colorbar(im, ax=ax, orientation='vertical', shrink=0.8)
 
         else:
@@ -627,7 +627,7 @@ def plot_results_from_im(obs_id, logger, path):
     rms_arr = np.array(rms_list)
 
     sky_region = create_region(obs_id, logger, path)[0]
-    #mean_rm = ionospheric_RM(obs_id, cal_ms, path)
+    mean_rm = ionospheric_RM(obs_id, cal_ms, path)
 
     #get flux from all images
     I_flux = []
@@ -701,7 +701,7 @@ def plot_results_from_im(obs_id, logger, path):
     axes[1].legend()
 
     axes[2].plot(freq_Ghz, pola_val, 'o', color='tab:blue', label="data")
-    #axes[2].plot(freq_Ghz, pola_val - np.degrees(mean_rm*wavelength_m**2), 'o', color='tab:green', label='corr data')
+    axes[2].plot(freq_Ghz, pola_val - np.degrees(mean_rm*wavelength_m**2), 'o', color='tab:green', label='corr data')
     axes[2].plot(freq_Ghz, model_pola(freq_Ghz),'-', color='tab:red', label='model')
     axes[2].set_xlabel("Frequency (GHz)")
     axes[2].set_ylabel("polarisation angle")
@@ -752,7 +752,7 @@ def run(logger, obs_id, pol_ms, path):
                 -squared-channel-joining -join-polarizations -fit-spectral-pol 4 -multiscale  -multiscale-scales 0,2,3,6 -multiscale-scale-bias 0.75 \
                 -parallel-deconvolution 1000 -parallel-gridding 1 -channel-range 0 {cutoff} -nwlayers-factor 3 -minuvw-m 40 -no-mf-weighting -weighting-rank-filter 3 \
                 -data-column CORRECTED_DATA {pol_ms}"
-        stdout, stderr = utils.run_command(cmd)
+        stdout, stderr = utils.run_command(cmd, logger)
         logger.info(stdout)
         if stderr:
             logger.error(f"Error in WSClean: {stderr}")
@@ -825,7 +825,7 @@ def run(logger, obs_id, pol_ms, path):
         rm_name = f'{obs_id}_3c286-'
         cmd = f"export PYTHONPATH=/opt/RM-Tools:$PYTHONPATH && python3 /opt/RM-Tools/RMtools_3D/do_RMsynth_3D.py {cube_name}Q_cube.fits {cube_name}U_cube.fits {cube_name}freq.txt -i {cube_name}I_masked.fits -n {cube_name}rms.txt -v -l {phi_max} -s 30 -w 'variance' -o {rm_name}"
         logger.info(f"IMAGE POLCAL: Executing command: {cmd}")
-        stdout, stderr = utils.run_command(cmd)
+        stdout, stderr = utils.run_command(cmd, logger)
         logger.info(stdout)
         if stderr:
             logger.error(f"Error in RMsynth: {stderr}")
