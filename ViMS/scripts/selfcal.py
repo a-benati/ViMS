@@ -122,7 +122,6 @@ def run(logger, obs_id, targets, path):
 
     for target in targets:
         try:
-            # ms_matches = glob.glob(f"{path}/MS_FILES/{obs_id}*{target}-avg.ms")
             ms_matches = glob.glob(f"{path}/MS_FILES/{obs_id}*{target}-avg.ms")
             if not ms_matches:
                 logger.warning(f"No MS file found for target {target}")
@@ -131,7 +130,35 @@ def run(logger, obs_id, targets, path):
             logger.info(f"Found MS file for {target}: {ms}")
             
             logger.info(f"Running selfcal for target {target}")
+
+            # Copy the CORRECTED_DATA column to DATA column
+            logger.info(f"Copying the CORRECTED_DATA column in the DATA column for {target}")
+
+            ms_splitted = ms.replace(".ms", "_splitted.ms")
+            dp3_parset = "split_DATA_column_tmp.dppp"
+
+            # Crea il parset file dinamicamente
+            with open(dp3_parset, "w") as f:
+                f.write(f"""\
+                            msin={ms}
+                            msout={ms_splitted}
+                            steps=[]
+                            msin.datacolumn=CORRECTED_DATA
+                            msout.datacolumn=DATA
+                            """)
+
+            cmd =f"DP3 {dp3_parset}"
+            stdout, stderr = utils.run_command(cmd, logger)
             
+            if stderr:
+                logger.warning(f"Error in copying the CORRECTED_DATA column in the DATA column for {target}:\n{stderr}")
+            
+            logger.info(f"CORRECTED_DATA column copied in the DATA column for {target} completed successfully!")
+            logger.info(f"Splitted MS file: {ms_splitted}")
+            utils.run_command(f"rm {dp3_parset}", logger)
+
+            # Run facetselfcal
+            logger.info(f"Running facetselfcal for target {target}")
             cmd = f"""facetselfcal -i {path}/SELFCAL_PRODUCTS/{obs_id}_{target}_selfcal --noarchive --forwidefield \
             --soltype-list="['scalarphase', 'scalarcomplexgain']" \
             --solint-list="['1min','30min']" --nchan-list=[1,1] \
@@ -139,11 +166,12 @@ def run(logger, obs_id, targets, path):
             --imsize=6000 --pixelsize=2. --channelsout=12 --niter=50000 \
             --paralleldeconvolution=1024 --start=0 --stop=4 --multiscale --clipsolutions \
             --multiscale-start=0 --parallelgridding=4 \
-            {ms}"""
+            --DDE --DDE-predict=WSCLEAN --targetFlux=2.0 \
+            {ms_splitted}"""
 
-            # cmd = f"""wsclean -no-update-model-required -minuv-l 80.0 -size 12000 12000 -scale 2.0arcsec \
+            # cmd = f"""wsclean -no-update-model-required -minuv-l 80.0 -size 6000 6000 -scale 2.0arcsec \
             #     -reorder -weight briggs -0.5 -parallel-reordering 4 -mgain 0.75 \
-            #     -data-column DATA -join-channels -channels-out 12 \
+            #     -data-column CORRECTED_DATA -join-channels -channels-out 12 \
             #     -parallel-deconvolution 1024 -parallel-gridding 4 -auto-mask 2.5 \
             #     -auto-threshold 0.5 -multiscale \
             #     -multiscale-max-scales 11 -save-source-list \
@@ -154,7 +182,6 @@ def run(logger, obs_id, targets, path):
             #     {ms}"""
 
             stdout, stderr = utils.run_command(cmd, logger)
-            logger.info(f"Selfcal output for {target}:\n{stdout}")
             
             if stderr:
                 logger.warning(f"Selfcal completed for {target} but with errors:\n{stderr}")

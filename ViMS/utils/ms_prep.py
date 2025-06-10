@@ -320,14 +320,35 @@ def average_targets(logger, obs_id, targets, path, nchan=512, force=False):
             if stderr:
                 logger.error(f"Error in deleting ms file: {stderr}")
 
-            mstransform(vis=split_ms,outputvis=split_ms_avg,createmms=False,\
-                    separationaxis="auto",numsubms="auto",tileshape=[0],field=target,spw="",scan="",antenna="", correlation="",timerange="",intent="",\
-                    array="",uvrange="",observation="",feed="",datacolumn="data",realmodelcol=False,keepflags=True,\
-                    usewtspectrum=True,combinespws=False,chanaverage=True,chanbin=chanbin,hanning=False, regridms=False,mode="channel",nchan=-1,start=0,width=1,\
-                    nspw=1,interpolation="linear",phasecenter="",restfreq="",outframe="",veltype="radio",preaverage=False,timeaverage=True,timebin="16s",\
-                    timespan="",maxuvwdistance=0.0,docallib=False, callib='',\
-                    douvcontsub=False,fitspw="",fitorder=0,want_cont=False,denoising_lib=True,nthreads=1,niter=1,disableparallel=False,ddistart=-1,taql="",\
-                    monolithic_processing=False,reindex=True)
+            # mstransform(vis=split_ms,outputvis=split_ms_avg,createmms=False,\
+            #         separationaxis="auto",numsubms="auto",tileshape=[0],field=target,spw="",scan="",antenna="", correlation="",timerange="",intent="",\
+            #         array="",uvrange="",observation="",feed="",datacolumn="data",realmodelcol=False,keepflags=True,\
+            #         usewtspectrum=True,combinespws=False,chanaverage=True,chanbin=chanbin,hanning=False, regridms=False,mode="channel",nchan=-1,start=0,width=1,\
+            #         nspw=1,interpolation="linear",phasecenter="",restfreq="",outframe="",veltype="radio",preaverage=False,timeaverage=True,timebin="16s",\
+            #         timespan="",maxuvwdistance=0.0,docallib=False, callib='',\
+            #         douvcontsub=False,fitspw="",fitorder=0,want_cont=False,denoising_lib=True,nthreads=1,niter=1,disableparallel=False,ddistart=-1,taql="",\
+            #         monolithic_processing=False,reindex=True)
+            
+            dp3_parset = "avg_DP3_tmp.dppp"
+
+            # Crea il parset file dinamicamente
+            with open(dp3_parset, "w") as f:
+                f.write(f"""\
+                            msin={split_ms}
+                            msout={split_ms_avg}
+                            msout.storagemanager=dysco
+                            steps=[average]
+                            average.timeresolution=16
+                            average.freqstep=8
+                            """)
+
+            cmd =f"DP3 {dp3_parset}"
+            stdout, stderr = utils.run_command(cmd, logger)
+            
+            if stderr:
+                logger.warning(f"Error in averaging the ms file for {target}:\n{stderr}")
+
+            utils.run_command(f"rm {dp3_parset}", logger)
         
             cal_size = file_size(split_ms_avg)
             space_left = free_space(f'{path}')
@@ -354,14 +375,35 @@ def average_targets(logger, obs_id, targets, path, nchan=512, force=False):
                 if stderr:
                     logger.error(f"Error in deleting ms file: {stderr}")
 
-                mstransform(vis=split_ms,outputvis=split_ms_avg,createmms=False,\
-                    separationaxis="auto",numsubms="auto",tileshape=[0],field=target,spw="",scan="",antenna="", correlation="",timerange="",intent="",\
-                    array="",uvrange="",observation="",feed="",datacolumn="data",realmodelcol=False,keepflags=True,\
-                    usewtspectrum=True,combinespws=False,chanaverage=True,chanbin=chanbin,hanning=False, regridms=False,mode="channel",nchan=-1,start=0,width=1,\
-                    nspw=1,interpolation="linear",phasecenter="",restfreq="",outframe="",veltype="radio",preaverage=False,timeaverage=True,timebin="16s",\
-                    timespan="",maxuvwdistance=0.0,docallib=False, callib='',\
-                    douvcontsub=False,fitspw="",fitorder=0,want_cont=False,denoising_lib=True,nthreads=1,niter=1,disableparallel=False,ddistart=-1,taql="",\
-                    monolithic_processing=False,reindex=True)
+                # mstransform(vis=split_ms,outputvis=split_ms_avg,createmms=False,\
+                #     separationaxis="auto",numsubms="auto",tileshape=[0],field=target,spw="",scan="",antenna="", correlation="",timerange="",intent="",\
+                #     array="",uvrange="",observation="",feed="",datacolumn="data",realmodelcol=False,keepflags=True,\
+                #     usewtspectrum=True,combinespws=False,chanaverage=True,chanbin=chanbin,hanning=False, regridms=False,mode="channel",nchan=-1,start=0,width=1,\
+                #     nspw=1,interpolation="linear",phasecenter="",restfreq="",outframe="",veltype="radio",preaverage=False,timeaverage=True,timebin="16s",\
+                #     timespan="",maxuvwdistance=0.0,docallib=False, callib='',\
+                #     douvcontsub=False,fitspw="",fitorder=0,want_cont=False,denoising_lib=True,nthreads=1,niter=1,disableparallel=False,ddistart=-1,taql="",\
+                #     monolithic_processing=False,reindex=True)
+                
+                dp3_parset = "avg_DP3_tmp.dppp"
+
+                # Crea il parset file dinamicamente
+                with open(dp3_parset, "w") as f:
+                    f.write(f"""\
+                                msin={split_ms}
+                                msout={split_ms_avg}
+                                msout.storagemanager=dysco
+                                steps=[average]
+                                average.timeresolution=16
+                                average.freqstep=8
+                                """)
+
+                cmd =f"DP3 {dp3_parset}"
+                stdout, stderr = utils.run_command(cmd, logger)
+                
+                if stderr:
+                    logger.warning(f"Error in averaging the ms file for {target}:\n{stderr}")
+
+                utils.run_command(f"rm {dp3_parset}", logger)
         
                 cal_size = file_size(split_ms_avg)
                 space_left = free_space(f'{path}')
@@ -370,14 +412,35 @@ def average_targets(logger, obs_id, targets, path, nchan=512, force=False):
             logger.info(f'Creating target ms file {split_ms_avg}')
             chanbin = round(nchan_tar/nchan)
 
-            mstransform(vis=split_ms,outputvis=split_ms_avg,createmms=False,\
-                separationaxis="auto",numsubms="auto",tileshape=[0],field=target,spw="",scan="",antenna="", correlation="",timerange="",intent="",\
-                array="",uvrange="",observation="",feed="",datacolumn="data",realmodelcol=False,keepflags=True,\
-                usewtspectrum=True,combinespws=False,chanaverage=True,chanbin=chanbin,hanning=False, regridms=False,mode="channel",nchan=-1,start=0,width=1,\
-                nspw=1,interpolation="linear",phasecenter="",restfreq="",outframe="",veltype="radio",preaverage=False,timeaverage=True,timebin="16s",\
-                timespan="",maxuvwdistance=0.0,docallib=False, callib='',\
-                douvcontsub=False,fitspw="",fitorder=0,want_cont=False,denoising_lib=True,nthreads=1,niter=1,disableparallel=False,ddistart=-1,taql="",\
-                monolithic_processing=False,reindex=True)
+            # mstransform(vis=split_ms,outputvis=split_ms_avg,createmms=False,\
+            #     separationaxis="auto",numsubms="auto",tileshape=[0],field=target,spw="",scan="",antenna="", correlation="",timerange="",intent="",\
+            #     array="",uvrange="",observation="",feed="",datacolumn="data",realmodelcol=False,keepflags=True,\
+            #     usewtspectrum=True,combinespws=False,chanaverage=True,chanbin=chanbin,hanning=False, regridms=False,mode="channel",nchan=-1,start=0,width=1,\
+            #     nspw=1,interpolation="linear",phasecenter="",restfreq="",outframe="",veltype="radio",preaverage=False,timeaverage=True,timebin="16s",\
+            #     timespan="",maxuvwdistance=0.0,docallib=False, callib='',\
+            #     douvcontsub=False,fitspw="",fitorder=0,want_cont=False,denoising_lib=True,nthreads=1,niter=1,disableparallel=False,ddistart=-1,taql="",\
+            #     monolithic_processing=False,reindex=True)
+            
+            dp3_parset = "avg_DP3_tmp.dppp"
+
+            # Crea il parset file dinamicamente
+            with open(dp3_parset, "w") as f:
+                f.write(f"""\
+                            msin={split_ms}
+                            msout={split_ms_avg}
+                            msout.storagemanager=dysco
+                            steps=[average]
+                            average.timeresolution=16
+                            average.freqstep=8
+                            """)
+
+            cmd =f"DP3 {dp3_parset}"
+            stdout, stderr = utils.run_command(cmd, logger)
+            
+            if stderr:
+                logger.warning(f"Error in averaging the ms file for {target}:\n{stderr}")
+
+            utils.run_command(f"rm {dp3_parset}", logger)
         
             cal_size = file_size(split_ms_avg)
             space_left = free_space(f'{path}')
