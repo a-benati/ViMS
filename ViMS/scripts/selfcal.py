@@ -166,7 +166,7 @@ def run(logger, obs_id, targets, path):
             --imsize=6000 --pixelsize=2. --channelsout=12 --niter=50000 \
             --paralleldeconvolution=1024 --start=0 --stop=4 --multiscale --clipsolutions \
             --multiscale-start=0 --parallelgridding=4 \
-            --DDE --DDE-predict=WSCLEAN --targetFlux=2.0 \
+            # --DDE --DDE-predict=WSCLEAN --targetFlux=2.0 \
             {ms_splitted}"""
 
             # cmd = f"""wsclean -no-update-model-required -minuv-l 80.0 -size 6000 6000 -scale 2.0arcsec \
