@@ -5,8 +5,6 @@ from utils import log, utils
 import glob
 import time
 
-#cal_ms = "/localwork/angelina/meerkat_virgo/Obs01_caldemo_2k/msdir/obs07_1k_demo-cal.ms"
-
 ##############################Command definitions#####################################################
 def convolve_beam(obs_id, logger, path):
     import glob
@@ -390,19 +388,21 @@ def create_region(obs_id, logger, path):
 
 #-------------------------------------------------------------------
 
-def ionospheric_RM(obs_id, cal_ms, path):
+def ionospheric_RM(obs_id, path):
     import RMextract.getRM as gt
     import numpy as np
     from casatools import table
+    import glob
     """
     calculate the ionospheric RM contribution in direction of the polarisation calibrator
     for the specified observation
     """
-    msdir = cal_ms
+    msdir = glob.glob(f'{path}/MS_FILES/{obs_id}_*-cal-pol.ms')[0]
+    #msdir = cal_ms
     ionex_dir = f'{path}/IONEX_DATA/'
 
     pointing = [3.539257790414, 0.53248520675] #direction of 3C286
-    field_id = 1
+    field_id = 0
     ref_ant = 'm000'
 
     tec = gt.getRM(MS=msdir, ionexPath=ionex_dir, server='ftp://gssc.esa.int/gnss/products/ionex/',earth_rot=0.5,ha_limit=1*np.pi, radec=pointing, prefix='UQRG', out_file=f'{path}/STOKES_CUBES/{obs_id}_3c286-ioncorr.txt')
@@ -517,7 +517,8 @@ def plot_results(obs_id, logger, path):
 
         #correct rotation measure value for ionospheric contribution
         if name == 'Rotation measure':
-            ionospheric_rm = ionospheric_RM(obs_id, cal_ms, path)
+            ionospheric_rm = ionospheric_RM(obs_id, path)
+            logger.info(f'ionospheric_RM: calculated mean RM for {obs_id} is {ionospheric_rm} rad/m^2')
             weighted_mean_ioncorr = weighted_mean - ionospheric_rm
             mean_value_ioncorr = mean_value - ionospheric_rm
 
@@ -627,7 +628,7 @@ def plot_results_from_im(obs_id, logger, path):
     rms_arr = np.array(rms_list)
 
     sky_region = create_region(obs_id, logger, path)[0]
-    mean_rm = ionospheric_RM(obs_id, cal_ms, path)
+    mean_rm = ionospheric_RM(obs_id, path)
 
     #get flux from all images
     I_flux = []
@@ -823,7 +824,7 @@ def run(logger, obs_id, pol_ms, path):
         logger.info("IMAGE POLCAL: running rmsynth3d...")
         cube_name = f'{path}/STOKES_CUBES/{obs_id}_3c286_IQUV-'
         rm_name = f'{obs_id}_3c286-'
-        cmd = f"export PYTHONPATH=/opt/RM-Tools:$PYTHONPATH && python3 /opt/RM-Tools/RMtools_3D/do_RMsynth_3D.py {cube_name}Q_cube.fits {cube_name}U_cube.fits {cube_name}freq.txt -i {cube_name}I_masked.fits -n {cube_name}rms.txt -v -l {phi_max} -s 30 -w 'variance' -o {rm_name}"
+        cmd = f"export PYTHONPATH=/opt/RM-Tools:$PYTHONPATH && python3.10 /opt/RM-Tools/RMtools_3D/do_RMsynth_3D.py {cube_name}Q_cube.fits {cube_name}U_cube.fits {cube_name}freq.txt -i {cube_name}I_masked.fits -n {cube_name}rms.txt -v -l {phi_max} -s 30 -w 'variance' -o {rm_name}"
         logger.info(f"IMAGE POLCAL: Executing command: {cmd}")
         stdout, stderr = utils.run_command(cmd, logger)
         logger.info(stdout)

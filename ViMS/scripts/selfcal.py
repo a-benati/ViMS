@@ -131,7 +131,7 @@ def run(logger, obs_id, targets, path):
             
             logger.info(f"Running selfcal for target {target}")
 
-            # Copy the CORRECTED_DATA column to DATA column
+            '''# Copy the CORRECTED_DATA column to DATA column
             logger.info(f"Copying the CORRECTED_DATA column in the DATA column for {target}")
 
             ms_splitted = ms.replace(".ms", "_splitted.ms")
@@ -153,9 +153,11 @@ def run(logger, obs_id, targets, path):
             if stderr:
                 logger.warning(f"Error in copying the CORRECTED_DATA column in the DATA column for {target}:\n{stderr}")
             
-            logger.info(f"CORRECTED_DATA column copied in the DATA column for {target} completed successfully!")
+            
+            #logger.info(f"CORRECTED_DATA column copied in the DATA column for {target} completed successfully!")
             logger.info(f"Splitted MS file: {ms_splitted}")
             utils.run_command(f"rm {dp3_parset}", logger)
+            '''
 
             # Run facetselfcal
             logger.info(f"Running facetselfcal for target {target}")
@@ -168,7 +170,7 @@ def run(logger, obs_id, targets, path):
             --multiscale-start=0 --parallelgridding=4 \
             """
             # cmd += f" --DDE --DDE-predict=WSCLEAN --targetFlux=2.0 "
-            cmd += f" {ms_splitted}"
+            cmd += f" {ms}"
 
             # cmd = f"""wsclean -no-update-model-required -minuv-l 80.0 -size 6000 6000 -scale 2.0arcsec \
             #     -reorder -weight briggs -0.5 -parallel-reordering 4 -mgain 0.75 \

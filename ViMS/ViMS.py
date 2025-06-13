@@ -16,7 +16,7 @@ OBS_ALL = [f"obs{str(i).zfill(2)}" for i in range(1, 65)]
 parser = argparse.ArgumentParser(description="Victoria MeerKAT Survey (ViMS) pipeline.")
 parser.add_argument("--obs-id", nargs="+", help="List of observation IDs to run (e.g., obs01 obs02)")
 parser.add_argument("--start-from", type=str, help="Start from this observation ID and run all the following ones")
-parser.add_argument("--start-step", type=str, choices=["flag_cal", "crosscal", "im_polcal", "flag_target", "applycal", "selfcal"], default="flag",
+parser.add_argument("--start-step", type=str, choices=["flag_cal", "crosscal", "im_polcal", "flag_target", "applycal", "selfcal"], default="flag_cal",
                     help="Pipeline step to start from (default: flag)")
 args = parser.parse_args()
 
@@ -37,7 +37,7 @@ steps = {"flag_cal": 1, "crosscal": 2, "im_polcal": 3, "flag_target": 4, "applyc
 current_step = steps[args.start_step]
 
 # Initialize Google Doc
-log.initialize_google_docs_once()
+#log.initialize_google_docs_once()
 
 for obs_id in obs_ids:
     
@@ -109,8 +109,12 @@ for obs_id in obs_ids:
     ##########################################################
     # Split the full ms file into target ms files
     targets = ms_prep.split_targets(logger, obs_id, full_ms, output_dir)
+    targets = ['virgo082']
 
     if current_step <= 4:
+        # Split the full ms file into target ms files
+        # targets = ['virgo064', 'virgo081', 'virgo084', 'virgo101', 'virgo102']
+
         # swap the feeds of the target ms files, will skip automatically if already exists, then flag them
         for target in targets:
             split_ms = glob.glob(f"{ms_dir}/*{target}.ms")[0]
@@ -121,8 +125,10 @@ for obs_id in obs_ids:
     ####################### APPLY CAL ########################
     ##########################################################
     if current_step <= 5:
-        ms_prep.average_targets(logger, obs_id, targets, output_dir, force=False)
+        #cal_ms.cal_lib(obs_id, logger, "J1939-6342", output_dir)
         ms_prep.apply_cal(logger, obs_id, targets, output_dir)
+        ms_prep.average_targets(logger, obs_id, targets, output_dir, force=True)
+        #ms_prep.apply_cal(logger, obs_id, targets, output_dir)
         ms_prep.ionosphere_corr_target(logger, obs_id, targets, output_dir)
 
     ##########################################################
@@ -130,6 +136,8 @@ for obs_id in obs_ids:
     ##########################################################
     if current_step <= 6:
         selfcal.run(logger, obs_id, targets, output_dir)
+
+    
     
     # Log the obs footer
     log.log_obs_footer(logger, obs_id)

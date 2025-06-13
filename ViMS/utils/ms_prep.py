@@ -313,7 +313,7 @@ def average_targets(logger, obs_id, targets, path, nchan=512, force=False):
                 
             chanbin = round(nchan_tar/nchan)
 
-            cmd = f"rm -r {split_ms_avg} && rm -r {split_ms_avg}.flagversions"
+            cmd = f"rm -r {split_ms_avg}"
 
             stdout, stderr = utils.run_command(cmd, logger)
             logger.info(stdout)
@@ -335,11 +335,12 @@ def average_targets(logger, obs_id, targets, path, nchan=512, force=False):
             with open(dp3_parset, "w") as f:
                 f.write(f"""\
                             msin={split_ms}
+                            msin.datacolumn=CORRECTED_DATA
                             msout={split_ms_avg}
                             msout.storagemanager=dysco
                             steps=[average]
                             average.timeresolution=16
-                            average.freqstep=8
+                            average.freqstep={chanbin}
                             """)
 
             cmd =f"DP3 {dp3_parset}"
@@ -362,13 +363,13 @@ def average_targets(logger, obs_id, targets, path, nchan=512, force=False):
             msmd.close()
 
             if nchan_in >= nchan -100 and nchan_in <= nchan +100:
-                logger.info(f'Target ms file {split_ms} averaged to {nchan} channels already exists. Skipping averaging step.')
+                logger.info(f'Target ms file {split_ms_avg} averaged to {nchan} channels already exists. Skipping averaging step.')
                 continue
             else:
-                logger.info(f'Target ms file {split_ms} already exists but with different channel number. Recreating...')
+                logger.info(f'Target ms file {split_ms_avg} already exists but with different channel number. Recreating...')
                 chanbin = round(nchan_tar/nchan)
 
-                cmd = f"rm -r {split_ms} && rm -r {split_ms}.flagversions"
+                cmd = f"rm -r {split_ms_avg}"
 
                 stdout, stderr = utils.run_command(cmd, logger)
                 logger.info(stdout)
@@ -390,11 +391,12 @@ def average_targets(logger, obs_id, targets, path, nchan=512, force=False):
                 with open(dp3_parset, "w") as f:
                     f.write(f"""\
                                 msin={split_ms}
+                                msin.datacolumn=CORRECTED_DATA
                                 msout={split_ms_avg}
                                 msout.storagemanager=dysco
                                 steps=[average]
                                 average.timeresolution=16
-                                average.freqstep=8
+                                average.freqstep={chanbin}
                                 """)
 
                 cmd =f"DP3 {dp3_parset}"
@@ -427,11 +429,12 @@ def average_targets(logger, obs_id, targets, path, nchan=512, force=False):
             with open(dp3_parset, "w") as f:
                 f.write(f"""\
                             msin={split_ms}
+                            msin.datacolumn=CORRECTED_DATA
                             msout={split_ms_avg}
                             msout.storagemanager=dysco
                             steps=[average]
                             average.timeresolution=16
-                            average.freqstep=8
+                            average.freqstep={chanbin}
                             """)
 
             cmd =f"DP3 {dp3_parset}"
@@ -458,13 +461,13 @@ def apply_cal(logger, obs_id, targets, path):
     """
 
     for target in targets:
-        target_avg = glob.glob(f"{path}/MS_FILES/{obs_id}*{target}-avg.ms")[0]
-        if not os.path.exists(target_avg):
-            logger.error(f"Target ms file {target_avg} does not exist.")
+        target = glob.glob(f"{path}/MS_FILES/{obs_id}*{target}.ms")[0]
+        if not os.path.exists(target):
+            logger.error(f"Target ms file {target} does not exist.")
 
         else:
             logger.info(f'Applying calibration tables to target {target}')
-            applycal(vis=target_avg, gaintable=[f'{path}/CAL_TABLES/{obs_id}_calib.kcal.sec', f'{path}/CAL_TABLES/{obs_id}_calib.gcal_p.sec',\
+            applycal(vis=target, gaintable=[f'{path}/CAL_TABLES/{obs_id}_calib.kcal.sec', f'{path}/CAL_TABLES/{obs_id}_calib.gcal_p.sec',\
                      f'{path}/CAL_TABLES/{obs_id}_calib.gcal_a2', f'{path}/CAL_TABLES/{obs_id}_calib.bandpass2',f'{path}/CAL_TABLES/{obs_id}_calib.T.sec',\
                     f'{path}/CAL_TABLES/{obs_id}_calib.df2', f'{path}/CAL_TABLES/{obs_id}_calib.kcrosscal', f'{path}/CAL_TABLES/{obs_id}_calib.xf.ambcorr'], parang=True, flagbackup=False)
 
@@ -496,7 +499,7 @@ def ionosphere_corr_target(logger, obs_id, targets, path):
         h5parm_tools.write_rm_to_h5parm(rms=rms, h5parm_name=h5parm_name)
         logger.info(f"ionosphere_rm: Created h5parm file {h5parm_name} with ionospheric RM.")
 
-        cmd = f"DP3 msin={target_avg} msout=. msin.datacolumn=CORRECTED_DATA msout.datacolumn=CORRECTED_DATA steps=[cor] cor.type=correct cor.parmdb={h5parm_name} cor.correction=rotationmeasure000 cor.invert=True"
+        cmd = f"DP3 msin={target_avg} msout=. msin.datacolumn=DATA msout.datacolumn=DATA steps=[cor] cor.type=correct cor.parmdb={h5parm_name} cor.correction=rotationmeasure000 cor.invert=True"
         stdout, stderr = utils.run_command(cmd, logger)
         logger.info(stdout)
         if stderr:
