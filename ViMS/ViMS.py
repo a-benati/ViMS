@@ -8,7 +8,7 @@ import glob
 # Delete old CASA log files
 log.delete_old_logs()
 
-from scripts import flag, feedswap, crosscal, im_polcal, selfcal
+from scripts import flag, feedswap, crosscal, im_polcal, selfcal, im_target
 
 # List of observation IDs
 OBS_ALL = [f"obs{str(i).zfill(2)}" for i in range(1, 65)]
@@ -16,7 +16,7 @@ OBS_ALL = [f"obs{str(i).zfill(2)}" for i in range(1, 65)]
 parser = argparse.ArgumentParser(description="Victoria MeerKAT Survey (ViMS) pipeline.")
 parser.add_argument("--obs-id", nargs="+", help="List of observation IDs to run (e.g., obs01 obs02)")
 parser.add_argument("--start-from", type=str, help="Start from this observation ID and run all the following ones")
-parser.add_argument("--start-step", type=str, choices=["flag_cal", "crosscal", "im_polcal", "flag_target", "applycal", "selfcal"], default="flag_cal",
+parser.add_argument("--start-step", type=str, choices=["flag_cal", "crosscal", "im_polcal", "flag_target", "applycal", "selfcal", "im_target"], default="flag_cal",
                     help="Pipeline step to start from (default: flag)")
 args = parser.parse_args()
 
@@ -33,7 +33,7 @@ else:
     obs_ids = OBS_ALL  # default: run all
 
 # Determine starting step
-steps = {"flag_cal": 1, "crosscal": 2, "im_polcal": 3, "flag_target": 4, "applycal": 5, "selfcal": 6}
+steps = {"flag_cal": 1, "crosscal": 2, "im_polcal": 3, "flag_target": 4, "applycal": 5, "selfcal": 6, "im_target": 7}
 current_step = steps[args.start_step]
 
 # Initialize Google Doc
@@ -109,7 +109,6 @@ for obs_id in obs_ids:
     ##########################################################
     # Split the full ms file into target ms files
     targets = ms_prep.split_targets(logger, obs_id, full_ms, output_dir)
-    targets = ['virgo082']
 
     if current_step <= 4:
         # Split the full ms file into target ms files
@@ -136,6 +135,15 @@ for obs_id in obs_ids:
     ##########################################################
     if current_step <= 6:
         selfcal.run(logger, obs_id, targets, output_dir)
+
+
+    ##########################################################
+    ##################### POLIM TARGET #######################
+    ##########################################################
+    
+    target = "virgo083"
+    if current_step <= 7:
+        im_target.run(logger, obs_id, target, output_dir)
 
     
     
