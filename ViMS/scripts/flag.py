@@ -320,6 +320,35 @@ def flag_tricolour(logger, ms, target):
     except Exception as e:
         logger.exception("Error while flagging with Tricolour")
 
+def flag_tricolour_cal(logger, ms):
+    """
+    Function to flag the measurement set using TriColour.
+    
+    Parameters:
+        logger: logger instance of the pipeline
+        ms: measurement set file
+        target: target field to flag
+    """
+    try:
+        logger.info("\n\n\n\n\n")
+        logger.info("FLAG: Flagging with Tricolour...")
+        logger.info("-------------------------------------------------------------------------------------")
+        cmd = f"tricolour --config /ViMS/ViMS/utils/mk_rfi_flagging_calibrator_fields_firstpass.yaml\
+                --flagging-strategy total_power --data-column DATA --field-names 0,1,2\
+                --window-backend numpy {ms}"
+        stdout, stderr = utils.run_command(cmd, logger)
+        logger.info(stdout)
+        if stderr:
+            logger.error(f"Error in Tricolour: {stderr}")
+        logger.info("-------------------------------------------------------------------------------------")
+        logger.info("FLAG: Flagged with Tricolour \n\n\n\n\n")
+        logger.info("")
+        logger.info("")
+        logger.info("")
+        logger.info("\n\n\n\n\n")
+    except Exception as e:
+        logger.exception("Error while flagging with Tricolour")
+
 def flag_summary(logger, ms, obs_id):
     """
     Function to print a summary of the flags applied to the measurement set.
@@ -374,8 +403,14 @@ def run(logger, obs_id, ms, path, toflag='cal'):
     flag_bad_channels(logger, ms)
 
     if toflag == 'cal':
-        flag_aoflagger(logger, ms) # 1st time
-        flag_aoflagger(logger, ms) # 2nd time
+        if obs_id =='obs01' or obs_id == 'obs02':
+            logger.info('Using stricter flagging for daytime observations')
+            flag_tricolour_cal(logger, ms)
+
+        else:
+            logger.info('Using standard flagging for nighttime observations')
+            flag_aoflagger(logger, ms) # 1st time
+            flag_aoflagger(logger, ms) # 2nd time
     
     elif toflag == 'target':
         match = re.search(r'sdp_l0-([^.]+)\.ms$', ms)

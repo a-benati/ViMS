@@ -14,11 +14,16 @@ def convolve_beam(obs_id, logger, path):
     """
     im_name = f'{path}/CAL_IMAGES/{obs_id}_cal_3c286-'
     images = glob.glob(im_name + '0*image.fits')
+    MFS_q_image = f'{path}/CAL_IMAGES/{obs_id}_cal_3c286-MFS-Q-image.fits'
+    if not os.path.exists(MFS_q_image):
+        logger.error(f'Error in convolve_beam: MFS Q image {MFS_q_image} not found.')
+    else:
+        images.append(MFS_q_image)
     if not images:
         logger.error(f'Error in convolve_beam: No images found in {path}/CAL_IMAGES/')
         return
     all_images = AllImages([imagefile for imagefile in images])
-    all_images.convolve_to()
+    all_images.convolve_to(circbeam=True)
     all_images.write('-conv')
 
 #---------------------------------------------------------------------------------------
@@ -173,16 +178,25 @@ def rm_synth_param(obs_id, path, logger):
 
 #-------------------------------------------------------------------
 
-def StokesI_MFS_noise(obs_id, logger, path):
+def StokesI_MFS_noise(obs_id, logger, path, mode='I'):
     import numpy as np
     from astropy.io import fits
     """
     calucate the noise of the Stokes I MFS image
     """
 
-    im_name = f'{path}/CAL_IMAGES/{obs_id}_cal_3c286-'
-    MFS_I = im_name + 'MFS-I-image.fits'
-    hdu_im = fits.open(MFS_I)[0]
+    if mode == 'I':
+        im_name = f'{path}/CAL_IMAGES/{obs_id}_cal_3c286-'
+        MFS_I = im_name + 'MFS-I-image.fits'
+        hdu_im = fits.open(MFS_I)[0]
+
+    elif mode == 'Q':
+        im_name = f'{path}/CAL_IMAGES/{obs_id}_cal_3c286-MFS-Q-image--conv.fits'
+        hdu_im = fits.open(im_name)[0]
+    
+    else:
+        logger.error(f'Error in StokesI_MFS_noise: mode {mode} not supported. Use "I" or "Q".')
+        raise ValueError(f"Mode {mode} not supported. Use 'I' or 'Q'.")
 
     noise_center = [1781, 532]
     noise_box = [123, 82]
@@ -206,8 +220,8 @@ def final_rm_synth(obs_id, sigma_p, d_phi, logger, path):
      from the rmsynth3d output
      """
     GRM = 0.5 #Galactic RM in rad/m2, we consider it a constant value without error over the cluster
-    thresh_p = 6. #threshold in sigma for sigma_p
-    thresh_i = 5. #threshold in sigma for sigma_i
+    thresh_p = 5. #threshold in sigma for sigma_p
+    thresh_i = 6. #threshold in sigma for sigma_i
     sigma_i = StokesI_MFS_noise(obs_id, logger, path)
     RMSF_FWHM = d_phi #theoretical value from RMsynth param 
 
@@ -322,18 +336,18 @@ def create_region(obs_id, logger, path):
     import matplotlib.pyplot as plt
     """
     create a region file for the polarisation calibrator using a 10sig contour
-    of the MFS I image
+    of the MFS Q convolved image
     """
     #load image
-    MFS_I = f'{path}/CAL_IMAGES/{obs_id}_cal_3c286-MFS-I-image.fits'
-    hdu_im = fits.open(MFS_I)[0]
+    MFS_Q = f'{path}/CAL_IMAGES/{obs_id}_cal_3c286-MFS-Q-image--conv.fits'
+    hdu_im = fits.open(MFS_Q)[0]
     data = hdu_im.data.squeeze()
     header = hdu_im.header
     wcs_all = WCS(header)
     wcs = wcs_all.sub(['longitude', 'latitude'])
 
     #estimate background RMS
-    noise = StokesI_MFS_noise(obs_id, logger, path)
+    noise = StokesI_MFS_noise(obs_id, logger, path, mode='Q')
 
     #determine contour for central source
     contours = find_contours(data, 15*noise)
@@ -368,13 +382,13 @@ def create_region(obs_id, logger, path):
 
     region = PolygonSkyRegion(vertices=sky_coords)
     reg = Regions([region])
-    reg.write(f'{path}/STOKES_CUBES/{obs_id}_3c286_StokesI_region.reg', format='ds9', overwrite=True)
-    logger.info(f'create_region: created region file {path}/STOKES_CUBES/{obs_id}_3c286_StokesI_region.reg')
+    reg.write(f'{path}/STOKES_CUBES/{obs_id}_3c286_StokesQ_region.reg', format='ds9', overwrite=True)
+    logger.info(f'create_region: created region file {path}/STOKES_CUBES/{obs_id}_3c286_StokesQ_region.reg')
 
     #sanity check: plot image with region overlayed
     min = np.nanmin(data)
     max = np.nanmax(data)
-    out = f'{path}/PLOTS/{obs_id}_3c286_StokesI_region.png'
+    out = f'{path}/PLOTS/{obs_id}_3c286_StokesQ_region.png'
 
     plt.figure(figsize=(8,8))
     plt.imshow(data, origin='lower', cmap='viridis', vmin=min, vmax=max)
@@ -752,7 +766,7 @@ def run(logger, obs_id, pol_ms, path):
                 -field 0 -pol iquv -weight briggs -0.5 -j 32 -abs-mem 100.0 -channels-out 10 -join-channels -gridder wgridder -no-update-model-required \
                 -squared-channel-joining -join-polarizations -fit-spectral-pol 4 -multiscale  -multiscale-scales 0,2,3,6 -multiscale-scale-bias 0.75 \
                 -parallel-deconvolution 1000 -parallel-gridding 1 -channel-range 0 {cutoff} -nwlayers-factor 3 -minuvw-m 40 -no-mf-weighting -weighting-rank-filter 3 \
-                -data-column CORRECTED_DATA {pol_ms}"
+                -taper-gaussian 6 -data-column CORRECTED_DATA {pol_ms}"
         stdout, stderr = utils.run_command(cmd, logger)
         logger.info(stdout)
         if stderr:

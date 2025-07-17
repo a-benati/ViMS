@@ -22,7 +22,7 @@ def cal_lib(logger, obs_id, path):
     logger.info('Collect calibration tables applied to target fields')
     tables = [
         f'caltable="{path}/CAL_TABLES/{obs_id}_calib.kcal.sec" calwt=False tinterp="nearest" finterp="linear" fldmap="nearest" field="" spwmap=0',
-        f'caltable="{path}/CAL_TABLES/{obs_id}_calib.gcal_p.sec" calwt=False tinterp="nearest" finterp="linear" fldmap="nearest" field="" spwmap=0',
+        f'caltable="{path}/CAL_TABLES/{obs_id}_calib.gcal_p.sec-selfcal" calwt=False tinterp="nearest" finterp="linear" fldmap="nearest" field="" spwmap=0',
         f'caltable="{path}/CAL_TABLES/{obs_id}_calib.gcal_a2" calwt=False tinterp="nearest" finterp="linear" fldmap="nearest" field="" spwmap=0',
         f'caltable="{path}/CAL_TABLES/{obs_id}_calib.bandpass2" calwt=False tinterp="nearest" finterp="linear" fldmap="nearest" field="" spwmap=0',
         f'caltable="{path}/CAL_TABLES/{obs_id}_calib.T.sec" calwt=False tinterp="nearest" finterp="linear" fldmap="nearest" field="" spwmap=0',
@@ -276,7 +276,7 @@ def split_targets(logger, obs_id, full_ms, path):
 
 #----------------------------------------------------------------------------------------------------------------
 
-def average_targets(logger, obs_id, targets, path, nchan=512, force=False):
+def average_targets(logger, obs_id, targets, path, nchan=512, chanbin=None, force=False):
     from casatasks import mstransform, applycal
     from casatools import msmetadata
     import glob
@@ -311,8 +311,21 @@ def average_targets(logger, obs_id, targets, path, nchan=512, force=False):
             if stderr:
                 logger.error(f"Error in deleting ms file: {stderr}")
                 
-            chanbin = round(nchan_tar/nchan)
+            if chanbin is None:
+                if nchan_tar < 3000 and nchan_tar != 2048:
+                    chanbin=4
+                    dp3chan = 1860
+                elif nchan_tar >= 3000 and nchan_tar != 4096:
+                    chanbin = 8
+                    dp3chan = 3720
+                else:
+                    chanbin = nchan_tar/nchan
+                    dp3chan = nchan_tar
 
+            else:
+                chanbin = chanbin
+                dp3chan = nchan_tar
+            
             cmd = f"rm -r {split_ms_avg}"
 
             stdout, stderr = utils.run_command(cmd, logger)
@@ -336,6 +349,7 @@ def average_targets(logger, obs_id, targets, path, nchan=512, force=False):
                 f.write(f"""\
                             msin={split_ms}
                             msin.datacolumn=CORRECTED_DATA
+                            msin.nchan={dp3chan}
                             msout={split_ms_avg}
                             msout.storagemanager=dysco
                             steps=[average]
@@ -367,7 +381,20 @@ def average_targets(logger, obs_id, targets, path, nchan=512, force=False):
                 continue
             else:
                 logger.info(f'Target ms file {split_ms_avg} already exists but with different channel number. Recreating...')
-                chanbin = round(nchan_tar/nchan)
+            
+                if chanbin is None:
+                    if nchan_tar < 3000 and nchan_tar != 2048:
+                        chanbin=4
+                        dp3chan = 1860
+                    elif nchan_tar >= 3000 and nchan_tar != 4096:
+                        chanbin = 8
+                        dp3chan = 3720
+                    else:
+                        chanbin = nchan_tar/nchan
+                        dp3chan = nchan_tar
+                else:
+                    chanbin = chanbin
+                    dp3chan = nchan_tar
 
                 cmd = f"rm -r {split_ms_avg}"
 
@@ -392,6 +419,7 @@ def average_targets(logger, obs_id, targets, path, nchan=512, force=False):
                     f.write(f"""\
                                 msin={split_ms}
                                 msin.datacolumn=CORRECTED_DATA
+                                msin.nchan={dp3chan}
                                 msout={split_ms_avg}
                                 msout.storagemanager=dysco
                                 steps=[average]
@@ -412,7 +440,19 @@ def average_targets(logger, obs_id, targets, path, nchan=512, force=False):
                 logger.info(f'Size of the target file:{cal_size} MB. Space left in target path {path}; {space_left[2]}/{space_left[0]} GB. ({space_left[2]/space_left[0]*100} %)')
         else:
             logger.info(f'Creating target ms file {split_ms_avg}')
-            chanbin = round(nchan_tar/nchan)
+            if chanbin is None:
+                if nchan_tar < 3000 and nchan_tar != 2048:
+                    chanbin=4
+                    dp3chan = 1860
+                elif nchan_tar >= 3000 and nchan_tar != 4096:
+                    chanbin = 8
+                    dp3chan = 3720
+                else:
+                    chanbin = nchan_tar/nchan
+                    dp3chan = nchan_tar
+            else:
+                chanbin = chanbin
+                dp3chan = nchan_tar
 
             # mstransform(vis=split_ms,outputvis=split_ms_avg,createmms=False,\
             #     separationaxis="auto",numsubms="auto",tileshape=[0],field=target,spw="",scan="",antenna="", correlation="",timerange="",intent="",\
@@ -430,6 +470,7 @@ def average_targets(logger, obs_id, targets, path, nchan=512, force=False):
                 f.write(f"""\
                             msin={split_ms}
                             msin.datacolumn=CORRECTED_DATA
+                            msin.nchan={dp3chan}
                             msout={split_ms_avg}
                             msout.storagemanager=dysco
                             steps=[average]
@@ -467,7 +508,7 @@ def apply_cal(logger, obs_id, targets, path):
 
         else:
             logger.info(f'Applying calibration tables to target {target}')
-            applycal(vis=target, gaintable=[f'{path}/CAL_TABLES/{obs_id}_calib.kcal.sec', f'{path}/CAL_TABLES/{obs_id}_calib.gcal_p.sec',\
+            applycal(vis=target, gaintable=[f'{path}/CAL_TABLES/{obs_id}_calib.kcal.sec', f'{path}/CAL_TABLES/{obs_id}_calib.gcal_p.sec-selfcal',\
                      f'{path}/CAL_TABLES/{obs_id}_calib.gcal_a2', f'{path}/CAL_TABLES/{obs_id}_calib.bandpass2',f'{path}/CAL_TABLES/{obs_id}_calib.T.sec',\
                     f'{path}/CAL_TABLES/{obs_id}_calib.df2', f'{path}/CAL_TABLES/{obs_id}_calib.kcrosscal', f'{path}/CAL_TABLES/{obs_id}_calib.xf.ambcorr'], parang=True, flagbackup=False)
 

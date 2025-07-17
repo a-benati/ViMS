@@ -17,7 +17,7 @@ parser = argparse.ArgumentParser(description="Victoria MeerKAT Survey (ViMS) pip
 parser.add_argument("--obs-id", nargs="+", help="List of observation IDs to run (e.g., obs01 obs02)")
 parser.add_argument("--start-from", type=str, help="Start from this observation ID and run all the following ones")
 parser.add_argument("--start-step", type=str, choices=["flag_cal", "crosscal", "im_polcal", "flag_target", "applycal", "selfcal", "im_target"], default="flag_cal",
-                    help="Pipeline step to start from (default: flag)")
+                    help="Pipeline step to start from (default: flag_cal)")
 args = parser.parse_args()
 
 # Determine list of obs to process
@@ -98,7 +98,7 @@ for obs_id in obs_ids:
     if current_step <= 2:
         crosscal.run(logger, obs_id, flux_ms, pol_ms, output_dir)
 
-    ##########################################################
+    '''##########################################################
     ####################### POLCAL IM ########################
     ##########################################################
     if current_step <= 3:
@@ -109,6 +109,7 @@ for obs_id in obs_ids:
     ##########################################################
     # Split the full ms file into target ms files
     targets = ms_prep.split_targets(logger, obs_id, full_ms, output_dir)
+    #targets = ['virgo091']
 
     if current_step <= 4:
         # Split the full ms file into target ms files
@@ -126,25 +127,27 @@ for obs_id in obs_ids:
     if current_step <= 5:
         #cal_ms.cal_lib(obs_id, logger, "J1939-6342", output_dir)
         ms_prep.apply_cal(logger, obs_id, targets, output_dir)
-        ms_prep.average_targets(logger, obs_id, targets, output_dir, force=True)
-        #ms_prep.apply_cal(logger, obs_id, targets, output_dir)
+        ms_prep.average_targets(logger, obs_id, targets, output_dir, chanbin=None, force=True)
+            #ms_prep.apply_cal(logger, obs_id, targets, output_dir)
         ms_prep.ionosphere_corr_target(logger, obs_id, targets, output_dir)
 
     ##########################################################
     ######################## SELFCAL #########################
     ##########################################################
+
+    #targets = ['virgo038', 'virgo040']
     if current_step <= 6:
-        selfcal.run(logger, obs_id, targets, output_dir)
+        selfcal.run(logger, obs_id, targets, output_dir)'''
 
 
-    ##########################################################
+    '''##########################################################
     ##################### POLIM TARGET #######################
     ##########################################################
     
-    target = "virgo083"
+    #target = "virgo091"
     if current_step <= 7:
         im_target.run(logger, obs_id, target, output_dir)
-
+'''
     
     
     # Log the obs footer

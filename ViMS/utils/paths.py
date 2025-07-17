@@ -16,20 +16,10 @@ def setup_output_dirs(obs_id):
     base_output_dir = os.path.join("/beegfs/bba5268/meerkat_virgo", obs_id)
     #base_output_dir = os.path.join("/beegfs/bbf4346/OUTPUT", obs_id)
     subdirs = ["LOGS", "CAL_TABLES", "PLOTS", "CAL_IMAGES", "MS_FILES", "STOKES_CUBES", "IONEX_DATA", "TARGET_IMAGES", "SELFCAL_PRODUCTS"]
-    target_subdirs = ["image_0", "image_1", "image_2", "image_3", "image_4", "image_5"]
 
     for subdir in subdirs:
         try:
             path = os.path.join(base_output_dir, subdir)
-            os.makedirs(path, exist_ok=True)
-        except Exception as e:
-            print(f"Error creating {path}: {e}")
-            raise
-    
-    #REMOVE HARDCODING OF SELFCAL-LOOPS
-    for subdir in target_subdirs:
-        try:
-            path = os.path.join(base_output_dir, "TARGET_IMAGES", subdir)
             os.makedirs(path, exist_ok=True)
         except Exception as e:
             print(f"Error creating {path}: {e}")

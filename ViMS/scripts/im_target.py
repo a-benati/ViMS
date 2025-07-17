@@ -12,10 +12,10 @@ def convolve_beam(obs_id, target, logger, path):
     """
     convolve the beam of all given images to a common size
     """
-    im_name = f'{path}/TARGET_IMAGES/image_4/{obs_id}_{target}_pol-'
-    images = glob.glob(im_name + '0*image-cut.fits')
+    im_name = f'{path}/TARGET_IMAGES/{obs_id}_{target}_pol-'
+    images = glob.glob(im_name + '0*image*pb-cut.fits')
     if not images:
-        logger.error(f'Error in convolve_beam: No images found in {path}/TARGET_IMAGES/image_4')
+        logger.error(f'Error in convolve_beam: No images found in {path}/TARGET_IMAGES')
         return
     all_images = AllImages([imagefile for imagefile in images])
     all_images.convolve_to()
@@ -30,8 +30,8 @@ def make_cubes(logger, obs_id, target, path):
     """
     create image cubes out of the produced images by wsclean for Stokes I, Q and U
     """
-    im_name = f'{path}/TARGET_IMAGES/image_4/{obs_id}_{target}_pol-'
-    MFS_I = im_name + 'MFS-I-image-cut.fits'
+    im_name = f'{path}/TARGET_IMAGES/{obs_id}_{target}_pol-'
+    MFS_I = im_name + 'MFS-I-image-pb-cut.fits'
     cube_name = f'{path}/STOKES_CUBES/{obs_id}_{target}_'
     output_cube = cube_name + 'IQUV-'
     hdu_im = fits.open(MFS_I)[0]
@@ -40,8 +40,10 @@ def make_cubes(logger, obs_id, target, path):
     if head['NAXIS'] == 4:
         hdu2D = hdu_im.data[0, 0, :, :]
 
-    noise_center = [816,801]
-    noise_box = [216,143]
+    #noise_center = [816,801]
+    #noise_box = [216,143]
+    noise_center = [200,200]
+    noise_box = [143,143]
     #noise_center = [1781, 532]
     #noise_box = [123, 82]
 
@@ -52,7 +54,7 @@ def make_cubes(logger, obs_id, target, path):
     img_i=[]
     freq=[]
 
-    files=glob.glob(im_name+'*Q*image-cut--conv.fits')
+    files=glob.glob(im_name+'*Q*image*-cut--conv.fits')
     sorted_list = sorted(files, key=lambda x: int(''.join(filter(str.isdigit, x))))
     for i in sorted_list:
         if 'MFS' not in i:
@@ -72,13 +74,15 @@ def make_cubes(logger, obs_id, target, path):
                 hdu_i = fits.open(i.replace('-Q-','-I-'))[0]
                 data_i=hdu_i.data.squeeze()
 
+
                 data_rms_q  =data_q[noise_center[1]-noise_box[1]:noise_center[1]+noise_box[1],noise_center[0]-noise_box[0]:noise_center[0]+noise_box[0]]
                 data_rms_u  =data_u[noise_center[1]-noise_box[1]:noise_center[1]+noise_box[1],noise_center[0]-noise_box[0]:noise_center[0]+noise_box[0]]
 
-                if(~np.isnan(np.mean(data_rms_q))) and (~np.isnan(np.mean(data_rms_u))):
-                    q_noise=np.sqrt(np.mean(data_rms_q*data_rms_q))
-                    u_noise=np.sqrt(np.mean(data_rms_q*data_rms_q))
-                    if 0.5*(u_noise+q_noise) <= 0.01:
+
+                if(~np.isnan(np.nanmean(data_rms_q))) and (~np.isnan(np.nanmean(data_rms_u))):
+                    q_noise=np.sqrt(np.nanmean(data_rms_q*data_rms_q))
+                    u_noise=np.sqrt(np.nanmean(data_rms_q*data_rms_q))
+                    if 0.5*(u_noise+q_noise) <= 0.001:
                         logger.info(f'make_cubes: noise q: {q_noise}')
                         rms_q.append(q_noise)
                         img_q.append(data_q)
@@ -129,15 +133,17 @@ def stokesI_model(obs_id, target, path):
     data = hdul[0].data
     masked_data = np.empty_like(data)
 
-    noise_center = [816,801]
-    noise_box = [216,143]
+    noise_center = [200,200]
+    noise_box = [143,143]
+    #noise_center = [816,801]
+    #noise_box = [216,143]
     #noise_center = [1781, 532]
     #noise_box = [123, 82]
 
     for i in range(data.shape[0]):
         slice_2d = data[i, :, :]
         data_rms  =slice_2d[noise_center[1]-noise_box[1]:noise_center[1]+noise_box[1],noise_center[0]-noise_box[0]:noise_center[0]+noise_box[0]]
-        noise = np.sqrt(np.mean(data_rms*data_rms))
+        noise = np.sqrt(np.nanmean(data_rms*data_rms))
         thresh = 1.5*noise
         masked_data[i, :, :] = np.where(slice_2d >= thresh, slice_2d, np.nan)
     
@@ -184,19 +190,21 @@ def StokesI_MFS_noise(obs_id, target, logger, path):
     calucate the noise of the Stokes I MFS image
     """
 
-    im_name = f'{path}/TARGET_IMAGES/image_4/{obs_id}_{target}_pol-'
-    MFS_I = im_name + 'MFS-I-image-cut.fits'
+    im_name = f'{path}/TARGET_IMAGES/{obs_id}_{target}_pol-'
+    MFS_I = im_name + 'MFS-I-image-pb-cut.fits'
     hdu_im = fits.open(MFS_I)[0]
 
-    noise_center = [816,801]
-    noise_box = [216,143]
+    #noise_center = [816,801]
+    #noise_box = [216,143]
+    noise_center = [200,200]
+    noise_box = [143,143]
     #noise_center = [686, 3866]
     #noise_box = [300, 230]
 
     data_i=hdu_im.data.squeeze()
     data_rms_i  =data_i[noise_center[1]-noise_box[1]:noise_center[1]+noise_box[1],noise_center[0]-noise_box[0]:noise_center[0]+noise_box[0]]
-    if (~np.isnan(np.mean(data_rms_i))):
-        noise = np.sqrt(np.mean(data_rms_i*data_rms_i))
+    if (~np.isnan(np.nanmean(data_rms_i))):
+        noise = np.sqrt(np.nanmean(data_rms_i*data_rms_i))
     else:
         logger.Error('Error in StokesI_MFS_noise: RMS calculation failed for Stokes I image')
         raise ValueError("RMS calculation failed for Stokes I image")
@@ -211,9 +219,9 @@ def final_rm_synth(obs_id, target, sigma_p, d_phi, logger, path):
     """calculate the polarisation angle, polarisation fraction and RM maps
      from the rmsynth3d output
      """
-    GRM = 5.8 #Galactic RM in rad/m2, we consider it a constant value without error over the cluster
-    thresh_p = 3. #threshold in sigma for sigma_p
-    thresh_i = 3. #threshold in sigma for sigma_i
+    GRM = 1.59 #Galactic RM in rad/m2, we consider it a constant value without error over the cluster
+    thresh_p = 0. #threshold in sigma for sigma_p
+    thresh_i = 0. #threshold in sigma for sigma_i
     sigma_i = StokesI_MFS_noise(obs_id, target, logger, path)
     RMSF_FWHM = d_phi #theoretical value from RMsynth param 
 
@@ -226,9 +234,9 @@ def final_rm_synth(obs_id, target, sigma_p, d_phi, logger, path):
     name_polf = name_out+'_polf.fits' #... name of polarization fraction image
 
     # name of input images
-    name_tot = f'{path}/STOKES_CUBES/{obs_id}_{target}-FDF_tot_dirty.fits'
-    name_q = f'{path}/STOKES_CUBES/{obs_id}_{target}-FDF_real_dirty.fits'
-    name_u = f'{path}/STOKES_CUBES/{obs_id}_{target}-FDF_im_dirty.fits'
+    name_tot = f'{path}/STOKES_CUBES/{obs_id}_{target}-FDF_clean_tot.fits'
+    name_q = f'{path}/STOKES_CUBES/{obs_id}_{target}-FDF_clean_real.fits'
+    name_u = f'{path}/STOKES_CUBES/{obs_id}_{target}-FDF_clean_im.fits'
     name_i = f'{path}/STOKES_CUBES/{obs_id}_{target}_IQUV-I_cube.fits'
 
     #open input images
@@ -272,24 +280,25 @@ def final_rm_synth(obs_id, target, sigma_p, d_phi, logger, path):
             rm = phi_axis[np.argmax(tot[:, yy, xx])]
 
             # Select only pixels detected in polarization above a certain threshold
-            if f >= thresh_p * sigma_p and i >= thresh_i * sigma_i:
-                # Correct for the Ricean bias and write p
-                img_p[0, yy, xx] = np.sqrt(f * f - sigma_p * sigma_p)
-                # Cluster's RM
-                img_rm_cluster[0, yy, xx] = rm - GRM
-                # Error on RM
-                img_err_rm_cluster[0, yy, xx] = (RMSF_FWHM / 2) / (img_p[0, yy, xx] / sigma_p)
-                # Polarization angle
-                img_pola[0, yy, xx] = ((0.5 * np.arctan2(u, q)) - rm * lambda2_0) * (180.0 / np.pi)
-            else:
-                img_p[0, yy, xx] = np.nan
-                img_rm_cluster[0, yy, xx] = np.nan
-                img_err_rm_cluster[0, yy, xx] = np.nan
-                img_pola[0, yy, xx] = np.nan
+            #if f >= thresh_p * sigma_p and i >= thresh_i * sigma_i:
+            # Correct for the Ricean bias and write p
+            img_p[0, yy, xx] = np.sqrt(f * f - sigma_p * sigma_p)
+            # Cluster's RM
+            img_rm_cluster[0, yy, xx] = rm - GRM
+            # Error on RM
+            img_err_rm_cluster[0, yy, xx] = (RMSF_FWHM / 2) / (img_p[0, yy, xx] / sigma_p)
+            # Polarization angle
+            img_pola[0, yy, xx] = ((0.5 * np.arctan2(u, q)) - rm * lambda2_0) * (180.0 / np.pi)
+            img_pola[0, yy, xx] = img_pola[0, yy, xx] % 360 #TEST
+            #else:
+            #    img_p[0, yy, xx] = np.nan
+            #    img_rm_cluster[0, yy, xx] = np.nan
+            #    img_err_rm_cluster[0, yy, xx] = np.nan
+            #    img_pola[0, yy, xx] = np.nan
 
     # Compute polarization fraction map
     #img_polf = img_p / img_i
-    img_polf = np.divide(img_p, img_i, out=np.full_like(img_i, np.nan), where=img_i != 0)
+    img_polf = np.divide(img_p, img_i, out=np.full_like(img_i, 0), where=img_i != 0)
 
     #Write the results in a fits file. We first modify the header to set the right units for each image
 
@@ -334,17 +343,17 @@ def plot_results(obs_id, target, logger, path):
     name_pola = f'{path}/STOKES_CUBES/{obs_id}_{target}-final_pola.fits'
     name_rm = f'{path}/STOKES_CUBES/{obs_id}_{target}-final_RM.fits'
     name_err_rm = f'{path}/STOKES_CUBES/{obs_id}_{target}-final_err_RM.fits'
-    name_stokesI = f'{path}/TARGET_IMAGES/image_4/{obs_id}_{target}_pol-0000-I-image-cut.fits'
+    name_stokesI = f'{path}/TARGET_IMAGES/{obs_id}_{target}_pol-0000-I-image-pb-cut--conv.fits'
 
     mean_freq = 1.14e9 #mean frequency in Hz
-    cutout_size = (100, 100)
+    cutout_size = (200, 200)
 
     freq_list = np.loadtxt(f'{path}/STOKES_CUBES/{obs_id}_{target}_IQUV-freq.txt')
     hdu_I = fits.open(name_stokesI)
     header_i = hdu_I[0].header
     wcs_all = WCS(header_i)
     wcs = wcs_all.sub(['longitude', 'latitude'])
-    center_coord = SkyCoord(187.444841, 8.000476, unit='deg', frame='icrs')  # Center coordinates for the cutout
+    center_coord = SkyCoord(188.1721479, 14.0479368, unit='deg', frame='icrs')  # Center coordinates for the cutout
 
     xpix, ypix = center_coord.to_pixel(wcs, origin=0)  # Convert to pixel coordinates
 
@@ -400,7 +409,7 @@ def plot_results(obs_id, target, logger, path):
         cbar = plt.colorbar(im, ax=ax, orientation='vertical', shrink=0.8)
         
 
-    plt.savefig(f'{path}/PLOTS/{obs_id}_{target}_RMsynth_param_conv.png')
+    plt.savefig(f'{path}/PLOTS/{obs_id}_{target}_RMsynth_param_conv_highres.png')
 
 #---------------------------------------------------------------------------
 
@@ -424,13 +433,12 @@ def run(logger, obs_id, target, path):
     #log.append_to_google_doc("######################################################", "", warnings="", plot_link="", doc_name="ViMS Pipeline Plots")
     #log.append_to_google_doc("IMAGE POLCAL", "Started", warnings="", plot_link="")
 
-    '''
-    # image polarisation calibrator with Wsclean
+
     try:
         logger.info("\n\n\n\n\n")
         logger.info("IMAGE POL TARGET: starting WSClean...")
 
-        im_name = f'{path}/TARGET_IMAGES/image_4/{obs_id}_{target}_pol'
+        im_name = f'{path}/TARGET_IMAGES/{obs_id}_{target}_pol'
         target_ms = glob.glob(f'{path}/MS_FILES/{obs_id}_{target}*-avg.ms')[0]
         target_mask = glob.glob(f'{path}/SELFCAL_PRODUCTS/{obs_id}_{target}_selfcal_003-MFS*.mask.fits')[0]
 
@@ -440,7 +448,7 @@ def run(logger, obs_id, target, path):
         msmd.close()
         cutoff = int((1380 - 900)/chan_width) # cutoff at 1380 MHz to avoid off-axis leakage
 
-        cmd = f"wsclean -name {im_name} -size 6000 6000 -scale 2.asec -mgain 0.8 -niter 50000 -fits-mask {target_mask} \
+        '''cmd = f"wsclean -name {im_name} -size 6000 6000 -scale 2.asec -mgain 0.8 -niter 50000 -fits-mask {target_mask} \
                 -field 0 -pol iquv -weight briggs -0.5 -j 32 -abs-mem 100.0 -channels-out 20 -join-channels -gridder wgridder -no-update-model-required \
                 -squared-channel-joining -join-polarizations -fit-spectral-pol 4 -apply-primary-beam\
                 -parallel-deconvolution 1000 -parallel-gridding 1 -channel-range 0 {cutoff} -nwlayers-factor 3 -minuvw-m 40 -no-mf-weighting -weighting-rank-filter 3 \
@@ -454,16 +462,16 @@ def run(logger, obs_id, target, path):
         logger.info("")
         logger.info("")
         logger.info("")
-        #log.append_to_google_doc('IMAGE POLCAL', 'Finished WSClean', warnings="", plot_link="", doc_name="ViMS Pipeline Plots")
+        #log.append_to_google_doc('IMAGE POLCAL', 'Finished WSClean', warnings="", plot_link="", doc_name="ViMS Pipeline Plots")'''
     except Exception as e:
-            logger.exception("Error while running WSClean")'''
+            logger.exception("Error while running WSClean")
 
     # Comvolve beam to smallest common size
     
     try:
         logger.info("\n\n\n\n\n")
         logger.info("IMAGE POLCAL: convolving beam...")
-        convolve_beam(obs_id, target, logger, path)
+        #convolve_beam(obs_id, target, logger, path)
         logger.info('IMAGE POL TARGET: finished beam convolution')
         logger.info("")
         logger.info("")
@@ -473,7 +481,7 @@ def run(logger, obs_id, target, path):
         logger.exception("Error while convolving beam to smallest common size")
 
 #-------------------------------------------------------------------
-#TOADD: need to create a mosaic of all sub images before reading it into the rmsynth script!
+#TOADD: need to create a mosaic of all images before reading it into the rmsynth script!
 #-------------------------------------------------------------------
 
     # create Image cubes and model of Stokes I image
@@ -521,7 +529,7 @@ def run(logger, obs_id, target, path):
         logger.info("IMAGE POL TARGET: running rmsynth3d...")
         cube_name = f'{path}/STOKES_CUBES/{obs_id}_{target}_IQUV-'
         rm_name = f'{obs_id}_{target}-'
-        cmd = f"export PYTHONPATH=/opt/RM-Tools:$PYTHONPATH && python3.10 /opt/RM-Tools/RMtools_3D/do_RMsynth_3D.py {cube_name}Q_cube.fits {cube_name}U_cube.fits {cube_name}freq.txt -i {cube_name}I_masked.fits -n {cube_name}rms.txt -v -l {phi_max} -s 40 -w 'variance' -o {rm_name}"
+        cmd = f"export PYTHONPATH=/opt/RM-Tools:$PYTHONPATH && python3.10 /opt/RM-Tools/RMtools_3D/do_RMsynth_3D.py {cube_name}Q_cube.fits {cube_name}U_cube.fits {cube_name}freq.txt -n {cube_name}rms.txt -v -l {phi_max} -s 30 -w 'variance' -o {rm_name}"
         logger.info(f"IMAGE POL TARGET: Executing command: {cmd}")
         stdout, stderr = utils.run_command(cmd, logger)
         logger.info(stdout)
@@ -534,6 +542,26 @@ def run(logger, obs_id, target, path):
         #log.append_to_google_doc("IMAGE POLCAL", "Finished RMsynth3d", warnings="", plot_link="", doc_name="ViMS Pipeline Plots")
     except Exception as e:
         logger.exception("Error while running rmsynth3d")
+
+    try:
+        logger.info("\n\n\n\n\n")
+        logger.info("IMAGE POL TARGET: running rmclean3d...")
+        fdf_name = f'{path}/STOKES_CUBES/{obs_id}_{target}-FDF_tot_dirty.fits'
+        rmsf_name = f'{path}/STOKES_CUBES/{obs_id}_{target}-RMSF_tot.fits'
+        out_name = f'{obs_id}_{target}-'
+        cmd = f"export PYTHONPATH=/opt/RM-Tools:$PYTHONPATH && python3.10 /opt/RM-Tools/RMtools_3D/do_RMclean_3D.py {fdf_name} {rmsf_name} -c {3*sigma_p} -v -o {out_name}"
+        logger.info(f"IMAGE POL TARGET: Executing command: {cmd}")
+        stdout, stderr = utils.run_command(cmd, logger)
+        logger.info(stdout)
+        if stderr:
+            logger.error(f"Error in RMsynth: {stderr}")
+        logger.info("IMAGE POL TARGET: finished rmclean3d")
+        logger.info("")
+        logger.info("")
+        logger.info("")
+        #log.append_to_google_doc("IMAGE POLCAL", "Finished RMsynth3d", warnings="", plot_link="", doc_name="ViMS Pipeline Plots")
+    except Exception as e:
+        logger.exception("Error while running rmclean3d")
 
     #create maps of polarisation angle, fraction and RM value for the polarisation calibrator
     try:
