@@ -326,14 +326,14 @@ def crosscal(logger, obs_id, cal_ms, pol_ms, path, ref_ant='m000'):
     # Delay calibration
     gaincal(vis = calms, caltable = ktab, selectdata = True,\
         solint = "inf", field = bpcal, combine = "scan",uvrange='',\
-        refant = ref_ant, solnorm = False, gaintype = "K",\
+        refant = ref_ant, solnorm = False, gaintype = "K", refantmode='strict',\
         minsnr=3,parang = False)
 
     os.system(f'/opt/ragavi-env/bin/ragavi-gains --table {ktab} --field 1 --htmlname {path}/PLOTS/{obs}_Kcal --plotname {path}/PLOTS/{obs}_Kcal.png')
 
     # phase cal on bandpass calibrator
     gaincal(vis = calms, caltable = gtab_p, selectdata = True,\
-        solint = "60s", field = bpcal, combine = "",\
+        solint = "60s", field = bpcal, combine = "", refantmode='strict',\
         refant = ref_ant, gaintype = "G", calmode = "p",uvrange='',\
         gaintable = [ktab], gainfield = [''], interp = [''],parang = False)
 
@@ -377,7 +377,7 @@ def crosscal(logger, obs_id, cal_ms, pol_ms, path, ref_ant='m000'):
     # Refined delay calibration
     gaincal(vis = calms, caltable = ktab2, selectdata = True,\
         solint = "inf", field = bpcal, combine = "scan",uvrange='',\
-        refant = ref_ant, solnorm = False, gaintype = "K",\
+        refant = ref_ant, solnorm = False, gaintype = "K", refantmode='strict',\
         minsnr=3,parang = False, gaintable=[btab, gtab_p, gtab_a])
 
     os.system(f'/opt/ragavi-env/bin/ragavi-gains --table {ktab2} --field 1 -o {path}/PLOTS/{obs}_Kcal2 -p {path}/PLOTS/{obs}_Kcal2.png')
@@ -389,7 +389,7 @@ def crosscal(logger, obs_id, cal_ms, pol_ms, path, ref_ant='m000'):
         gaintable = [btab, ktab2], gainfield = ['',''], interp = ['',''],parang = False)
 
     gaincal(vis = calms, caltable = gtab_a2, selectdata = True,\
-        solint = "inf", field = bpcal, combine = "",\
+        solint = "inf", field = bpcal, combine = "", refantmode='strict',\
         refant = ref_ant, gaintype = "T", calmode = "a",uvrange='',\
         gaintable = [btab, ktab2, gtab_p2], gainfield = ['','',''], interp = ['','',''],parang = False)
 
@@ -421,6 +421,7 @@ def crosscal(logger, obs_id, cal_ms, pol_ms, path, ref_ant='m000'):
         flagmanager(vis=calms, mode='delete', versionname=obs+'_flag_before_df', merge='replace')
         logger.info("crosscal: Found 'flag_before_df'. Deleting it.")
     flagmanager(vis=calms, mode='save', versionname=obs+'_flag_before_df', merge='replace')
+    
 
     # Calibrate Df
     polcal(vis = calms, caltable = ptab_df, selectdata = True,\
@@ -455,7 +456,7 @@ def crosscal(logger, obs_id, cal_ms, pol_ms, path, ref_ant='m000'):
 
 
     polcal(vis = calms, caltable = ptab_df2, selectdata = True,\
-            solint = 'inf', field = bpcal, combine = '',\
+            solint = 'inf', field = bpcal, combine = '', \
             refant = ref_ant, poltype = 'Dflls', preavg= 200.0,\
             gaintable = [ktab2, gtab_p2,gtab_a2,btab2],\
             gainfield = ['', '', '',''],\
@@ -479,6 +480,7 @@ def crosscal(logger, obs_id, cal_ms, pol_ms, path, ref_ant='m000'):
     #os.system(f'/opt/shadems-env/bin/shadems {calms} -x FREQ -y DATA:amp -c CORR --corr XY,YX --field {bpcal} --dir {path}/PLOTS --png {obs}_{bpcal}_Df-DATA.png')
     os.system(f'/opt/shadems-env/bin/shadems {calms} -x FREQ -y CORRECTED_DATA:amp -c CORR --corr XY,YX --field {bpcal} --dir {path}/PLOTS --png {obs}_{bpcal}_Df-CORRECTED.png')
     os.system(f'/opt/shadems-env/bin/shadems {calms} -x CORRECTED_DATA:phase -y CORRECTED_DATA:amp -c CORR --corr XX,YY --field {gcal} --dir {path}/PLOTS --png {obs}_{gcal}_crosscal_XXYY.png')
+    os.system(f'/opt/shadems-env/bin/shadems {calms} -x ANTENNA1 -y CORRECTED_DATA:real -c CORR --corr XY,YX --field {bpcal} --dir {path}/PLOTS --png {obs}_{bpcal}_Df-antenna_leakage.png')
 
     logger.info("")
     logger.info("crosscal: Finished calibration of the primary calibrator")
@@ -518,6 +520,16 @@ def crosscal(logger, obs_id, cal_ms, pol_ms, path, ref_ant='m000'):
     logger.info("")
     logger.info('crosscal: Flagging summary after secondary phase selfcal:')
     flag.log_flagsum(df_cal_flag, logger)
+
+    gaincal(vis = calms, caltable = ktab_sec, selectdata = True,\
+        solint = "30min", field = gcal, combine = "scan",uvrange='',\
+        refant = ref_ant, solnorm = False, gaintype = "K",\
+        minsnr=3,parang = False, gaintable=[gtab_a2, btab2, ptab_df2])
+
+    gaincal(vis = calms, caltable = gtab_sec_p, selectdata = True,\
+        solint = "30s", field = gcal, combine = "",\
+        refant = ref_ant, gaintype = "G", calmode = "p",uvrange='',refantmode='strict',\
+        gaintable = [ktab_sec, gtab_a2,btab2,ptab_df2], parang = False)
 
     gaincal(vis = calms, caltable = Ttab_sec, selectdata = True,\
         solint = "inf", field = gcal, combine = "",\
@@ -576,10 +588,10 @@ def crosscal(logger, obs_id, cal_ms, pol_ms, path, ref_ant='m000'):
     gtab_pol_p=gtab_pol_p+"-selfcal"
 
 
-    '''gaincal(vis = pol_ms, caltable = Ttab_pol, selectdata = True,\
+    gaincal(vis = pol_ms, caltable = Ttab_pol, selectdata = True,\
         solint = "inf", field = xcal, combine = "",\
         refant = ref_ant, gaintype = "T", calmode = "ap",uvrange='', refantmode='strict',\
-        solnorm=True, gaintable = [ktab2, gtab_pol_p,gtab_a2,btab2,ptab_df2], append=False, parang=True)'''
+        solnorm=True, gaintable = [ktab2, gtab_pol_p,gtab_a2,btab2,ptab_df2], append=False, parang=True)
 
     #apply calibration up to  now, including phase refinement to xcal - crosshands should be real vaue dominated, imaginary will give idea of induced elliptcity. change in real axis due to parang
 
@@ -649,7 +661,7 @@ def run(logger, obs_id, cal_ms, pol_ms, path):
     try:
         logger.info("\n\n\n\n\n")
         logger.info("CROSSCAL: starting crosscalibration...")
-        crosscal(logger, obs_id, cal_ms, pol_ms, path)
+        crosscal(logger, obs_id, cal_ms, pol_ms, path, ref_ant='m000')
         logger.info("Crosscal step completed successfully!")
         logger.info("")
         logger.info("")
@@ -660,4 +672,3 @@ def run(logger, obs_id, cal_ms, pol_ms, path):
         logger.info("")
     except Exception as e:
         logger.exception("CROSSCAL: crosscalibration failed")
-    

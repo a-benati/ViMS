@@ -8,7 +8,7 @@ import glob
 # Delete old CASA log files
 log.delete_old_logs()
 
-from scripts import flag, feedswap, crosscal, im_polcal, selfcal, im_target
+from scripts import flag, feedswap, crosscal, im_polcal, selfcal, peel_m87, im_target, rmsynth_target
 
 # List of observation IDs
 OBS_ALL = [f"obs{str(i).zfill(2)}" for i in range(1, 65)]
@@ -16,7 +16,7 @@ OBS_ALL = [f"obs{str(i).zfill(2)}" for i in range(1, 65)]
 parser = argparse.ArgumentParser(description="Victoria MeerKAT Survey (ViMS) pipeline.")
 parser.add_argument("--obs-id", nargs="+", help="List of observation IDs to run (e.g., obs01 obs02)")
 parser.add_argument("--start-from", type=str, help="Start from this observation ID and run all the following ones")
-parser.add_argument("--start-step", type=str, choices=["flag_cal", "crosscal", "im_polcal", "flag_target", "applycal", "selfcal", "im_target"], default="flag_cal",
+parser.add_argument("--start-step", type=str, choices=["flag_cal", "crosscal", "im_polcal", "flag_target", "applycal", "selfcal", "peel_m87", "im_target"], default="flag_cal",
                     help="Pipeline step to start from (default: flag_cal)")
 args = parser.parse_args()
 
@@ -33,7 +33,7 @@ else:
     obs_ids = OBS_ALL  # default: run all
 
 # Determine starting step
-steps = {"flag_cal": 1, "crosscal": 2, "im_polcal": 3, "flag_target": 4, "applycal": 5, "selfcal": 6, "im_target": 7}
+steps = {"flag_cal": 1, "crosscal": 2, "im_polcal": 3, "flag_target": 4, "applycal": 5, "selfcal": 6, "peel_m87": 7, "im_target": 8}
 current_step = steps[args.start_step]
 
 # Initialize Google Doc
@@ -52,6 +52,7 @@ for obs_id in obs_ids:
     ionex_dir = os.path.join(output_dir, "IONEX_DATA")
     target_im_dir = os.path.join(output_dir, "TARGET_IMAGES")
     selfcal_dir = os.path.join(output_dir, "SELFCAL_PRODUCTS")
+    m87_dir = os.path.join(output_dir, "M87_IMAGES")
     
     # Create a logger instance for this obs
     logger_instance = log.Logger(logs_dir)
@@ -86,7 +87,6 @@ for obs_id in obs_ids:
 
         # swap the feeds of the calibrator ms file, will skip automatically if already exists
         feedswap.run(logger, cal_ms_file, output_dir)
-
         flag.run(logger, obs_id, cal_ms_file, output_dir, 'cal')
 
         #average the calibrator ms file and split into polarisation calibrator and flux/gain claibrator
@@ -98,7 +98,7 @@ for obs_id in obs_ids:
     if current_step <= 2:
         crosscal.run(logger, obs_id, flux_ms, pol_ms, output_dir)
 
-    '''##########################################################
+    ##########################################################
     ####################### POLCAL IM ########################
     ##########################################################
     if current_step <= 3:
@@ -137,19 +137,43 @@ for obs_id in obs_ids:
 
     #targets = ['virgo038', 'virgo040']
     if current_step <= 6:
-        selfcal.run(logger, obs_id, targets, output_dir)'''
+        selfcal.run(logger, obs_id, targets, output_dir)
+
+    ##########################################################
+    ####################### PEEL M87 #########################
+    ##########################################################
+
+    #targets = ['virgo023']: M87 is already peeled don't run again!
+    #targets = ['virgo064', 'virgo084']
+    targets = ['virgo084']
+    if current_step <= 7:
+        peel_m87.run(logger, obs_id, targets, output_dir)
 
 
-    '''##########################################################
+    ##########################################################
     ##################### POLIM TARGET #######################
     ##########################################################
-    
-    #target = "virgo091"
-    if current_step <= 7:
-        im_target.run(logger, obs_id, target, output_dir)
-'''
-    
-    
+
+    if current_step <= 8:
+        im_target.run(logger, obs_id, targets, output_dir)
+
+
     # Log the obs footer
     log.log_obs_footer(logger, obs_id)
     # log.log_obs_footer_google_doc(obs_id, doc_name_plots)
+
+
+'''if current_step <= 9:
+    obs_ids = []
+    targets = []
+    rmsynth_target.run(logger, obs_ids, targets, output_dir, mode='single')
+'''
+####
+#toDo: 
+#      - script copying data to /beegfs and unzipping it for processing
+#      - add multiple qualtity check to pipeline (maybe use apache airflow)--> include leakage sol, XY YX in time, rms vs beam size vs dynamical range
+####
+
+
+
+

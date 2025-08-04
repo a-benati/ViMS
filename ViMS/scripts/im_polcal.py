@@ -335,7 +335,7 @@ def create_region(obs_id, logger, path):
     from regions import PolygonSkyRegion, Regions
     import matplotlib.pyplot as plt
     """
-    create a region file for the polarisation calibrator using a 10sig contour
+    create a region file for the polarisation calibrator using a 20sig contour
     of the MFS Q convolved image
     """
     #load image
@@ -350,7 +350,7 @@ def create_region(obs_id, logger, path):
     noise = StokesI_MFS_noise(obs_id, logger, path, mode='Q')
 
     #determine contour for central source
-    contours = find_contours(data, 15*noise)
+    contours = find_contours(data, 20*noise)
     #ny, nx = data.shape
     #center_pixel = ((nx-1)/2, (ny-1)/2)
     ra_3c286 = 202.78481  # 13h31m08.354s

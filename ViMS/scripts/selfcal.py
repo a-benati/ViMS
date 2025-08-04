@@ -165,7 +165,7 @@ def run(logger, obs_id, targets, path):
             --soltype-list="['scalarphase', 'scalarcomplexgain']" \
             --solint-list="['1min','30min']" --nchan-list=[1,1] \
             --soltypecycles-list=[0,2] --smoothnessconstraint-list=[100.,50.] \
-            --imsize=14000 --pixelsize=2. --channelsout=12 --niter=50000 \
+            --imsize=6000 --pixelsize=2. --channelsout=12 --niter=50000 \
             --paralleldeconvolution=1024 --start=0 --stop=4 --multiscale --clipsolutions \
             --multiscale-start=0 --parallelgridding=4 \
             """

@@ -333,7 +333,7 @@ def flag_tricolour_cal(logger, ms):
         logger.info("\n\n\n\n\n")
         logger.info("FLAG: Flagging with Tricolour...")
         logger.info("-------------------------------------------------------------------------------------")
-        cmd = f"tricolour --config /ViMS/ViMS/utils/mk_rfi_flagging_calibrator_fields_firstpass.yaml\
+        cmd = f"tricolour --config /angelina/meerkat_virgo/ViMS/ViMS/utils/mk_rfi_flagging_calibrator_fields_firstpass.yaml\
                 --flagging-strategy total_power --data-column DATA --field-names 0,1,2\
                 --window-backend numpy {ms}"
         stdout, stderr = utils.run_command(cmd, logger)

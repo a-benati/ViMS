@@ -300,6 +300,7 @@ def average_targets(logger, obs_id, targets, path, nchan=512, chanbin=None, forc
         msmd = msmetadata()
         msmd.open(split_ms)
         nchan_tar = msmd.nchan(0)
+        logger.info(f'Number of channels of {target}: {nchan_tar}')
         msmd.close()
 
         if force == True and os.path.isdir(split_ms_avg):
@@ -313,13 +314,13 @@ def average_targets(logger, obs_id, targets, path, nchan=512, chanbin=None, forc
                 
             if chanbin is None:
                 if nchan_tar < 3000 and nchan_tar != 2048:
-                    chanbin=4
+                    chanbin=int(4)
                     dp3chan = 1860
                 elif nchan_tar >= 3000 and nchan_tar != 4096:
-                    chanbin = 8
+                    chanbin = int(8)
                     dp3chan = 3720
                 else:
-                    chanbin = nchan_tar/nchan
+                    chanbin = int(nchan_tar/nchan)
                     dp3chan = nchan_tar
 
             else:
@@ -384,13 +385,13 @@ def average_targets(logger, obs_id, targets, path, nchan=512, chanbin=None, forc
             
                 if chanbin is None:
                     if nchan_tar < 3000 and nchan_tar != 2048:
-                        chanbin=4
+                        chanbin=int(4)
                         dp3chan = 1860
                     elif nchan_tar >= 3000 and nchan_tar != 4096:
-                        chanbin = 8
+                        chanbin = int(8)
                         dp3chan = 3720
                     else:
-                        chanbin = nchan_tar/nchan
+                        chanbin = int(nchan_tar/nchan)
                         dp3chan = nchan_tar
                 else:
                     chanbin = chanbin
@@ -442,13 +443,13 @@ def average_targets(logger, obs_id, targets, path, nchan=512, chanbin=None, forc
             logger.info(f'Creating target ms file {split_ms_avg}')
             if chanbin is None:
                 if nchan_tar < 3000 and nchan_tar != 2048:
-                    chanbin=4
+                    chanbin=int(4)
                     dp3chan = 1860
                 elif nchan_tar >= 3000 and nchan_tar != 4096:
-                    chanbin = 8
+                    chanbin = int(8)
                     dp3chan = 3720
                 else:
-                    chanbin = nchan_tar/nchan
+                    chanbin = int(nchan_tar/nchan)
                     dp3chan = nchan_tar
             else:
                 chanbin = chanbin
