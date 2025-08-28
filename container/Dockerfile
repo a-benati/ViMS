@@ -270,6 +270,11 @@ RUN python3.10 -m pip install git+https://github.com/rvweeren/lofar_facet_selfca
 RUN python3.10 -m pip install quartical
 
 ####################################################################
+## Crystalball
+####################################################################
+RUN python3.10 -m pip install crystalball
+
+####################################################################
 ## DDFACET
 ####################################################################
 # Install Debian dependencies

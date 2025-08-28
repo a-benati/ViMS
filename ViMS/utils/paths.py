@@ -13,8 +13,8 @@ def setup_output_dirs(obs_id):
         str: Path to the base output directory for the given observation.
     """
     # base_output_dir = os.path.join("/lofar5", "OUTPUT", obs_id)
-    base_output_dir = os.path.join("/beegfs/bba5268/meerkat_virgo", obs_id)
-    #base_output_dir = os.path.join("/beegfs/bbf4346/OUTPUT", obs_id)
+    base_output_dir = os.path.join("/angelina/meerkat_virgo", obs_id)
+    #base_output_dir = os.path.join("/lofar/bbf4346/OUTPUT", obs_id)
     subdirs = ["LOGS", "CAL_TABLES", "PLOTS", "CAL_IMAGES", "MS_FILES", "STOKES_CUBES", "IONEX_DATA", "TARGET_IMAGES", "SELFCAL_PRODUCTS", "M87_IMAGES"]
 
     for subdir in subdirs:

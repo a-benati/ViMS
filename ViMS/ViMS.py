@@ -4,6 +4,8 @@ import os
 from utils import paths, log, ms_prep
 import argparse
 import glob
+from casatools import table
+import numpy as np
 
 # Delete old CASA log files
 log.delete_old_logs()
@@ -16,8 +18,10 @@ OBS_ALL = [f"obs{str(i).zfill(2)}" for i in range(1, 65)]
 parser = argparse.ArgumentParser(description="Victoria MeerKAT Survey (ViMS) pipeline.")
 parser.add_argument("--obs-id", nargs="+", help="List of observation IDs to run (e.g., obs01 obs02)")
 parser.add_argument("--start-from", type=str, help="Start from this observation ID and run all the following ones")
-parser.add_argument("--start-step", type=str, choices=["flag_cal", "crosscal", "im_polcal", "flag_target", "applycal", "selfcal", "peel_m87", "im_target"], default="flag_cal",
+parser.add_argument("--start-step", type=str, choices=["flag_cal", "crosscal", "im_polcal", "flag_target", "applycal", "selfcal", "peel_m87", "im_target", "rmsynth_target"], default="flag_cal",
                     help="Pipeline step to start from (default: flag_cal)")
+parser.add_argument("--delete-workdir", action="store_true", help="delete all data from the working directory (localwork) after copying back to storage (/lofar)")
+parser.add_argument("--do-rmsynth", action="store_true", help="perform RM synthesis on the target images set after the main pipeline")
 args = parser.parse_args()
 
 # Determine list of obs to process
@@ -33,7 +37,7 @@ else:
     obs_ids = OBS_ALL  # default: run all
 
 # Determine starting step
-steps = {"flag_cal": 1, "crosscal": 2, "im_polcal": 3, "flag_target": 4, "applycal": 5, "selfcal": 6, "peel_m87": 7, "im_target": 8}
+steps = {"flag_cal": 1, "crosscal": 2, "im_polcal": 3, "flag_target": 4, "applycal": 5, "selfcal": 6, "peel_m87": 7, "im_target": 8, "rmsynth_target": 9}
 current_step = steps[args.start_step]
 
 # Initialize Google Doc
@@ -69,10 +73,10 @@ for obs_id in obs_ids:
     log.log_obs_header(logger, obs_id)
     #log.log_obs_header_google_doc(obs_id, doc_name_plots)
  
-    # copy and unzip the full ms file to the working server /beegfs -NOT YET IMPLEMENTED
-    #full_ms = ms_prep.copy_ms(logger, obs_id, output_dir)
+    # check for full_ms file and unzips it if only .tar.gz file found
+    full_ms = ms_prep.get_ms(logger, obs_id)
     #full_ms = glob.glob(f'/beegfs/bba5268/meerkat_virgo/raw/{obs_id}*sdp_l0.ms')[0]
-    full_ms = glob.glob(f'/lofar2/p1uy068/meerkat-virgo/raw/{obs_id}*sdp_l0.ms')[0]
+    #full_ms = glob.glob(f'/lofar2/p1uy068/meerkat-virgo/raw/{obs_id}*sdp_l0.ms')[0]
     
 
     
@@ -81,24 +85,26 @@ for obs_id in obs_ids:
     ##########################################################
     if current_step <= 1:
         # Split full msfile into calibrator ms file (returns full path as a string)
-        cal_ms_file = ms_prep.split_cal(logger, obs_id, full_ms, output_dir)
+        cal_ms_file, calibrators, band, cal_roles = ms_prep.split_cal(logger, full_ms, output_dir)
         #cal_ms_file = '/localwork/angelina/meerkat_virgo/Obs25/obs25_1686240076_sdp_l0-cal.ms'
         #cal_ms_file = "/a.benati/lw/victoria/tests/flag/obs01_1662797070_sdp_l0-cal_copy.ms"
 
+        cal_fields = list(range(len(calibrators)))
+
         # swap the feeds of the calibrator ms file, will skip automatically if already exists
-        feedswap.run(logger, cal_ms_file, output_dir)
+        feedswap.run(logger, cal_ms_file, output_dir, fields=cal_fields)
         flag.run(logger, obs_id, cal_ms_file, output_dir, 'cal')
 
         #average the calibrator ms file and split into polarisation calibrator and flux/gain claibrator
-        pol_ms, flux_ms = ms_prep.average_cal(logger, cal_ms_file, output_dir)
+        pol_ms, flux_ms = ms_prep.average_cal(logger, cal_ms_file, output_dir, band, cal_roles, force=True)
 
     ##########################################################
     ######################## CROSSCAL ########################
     ##########################################################
     if current_step <= 2:
-        crosscal.run(logger, obs_id, flux_ms, pol_ms, output_dir)
+        crosscal.run(logger, obs_id, flux_ms, pol_ms, output_dir, band, cal_roles, ref_ant='m003')
 
-    ##########################################################
+    '''##########################################################
     ####################### POLCAL IM ########################
     ##########################################################
     if current_step <= 3:
@@ -118,6 +124,14 @@ for obs_id in obs_ids:
         # swap the feeds of the target ms files, will skip automatically if already exists, then flag them
         for target in targets:
             split_ms = glob.glob(f"{ms_dir}/*{target}.ms")[0]
+
+            tb = table()
+            tb.open(split_ms+'/FEED', nomodify=False)
+            feed_angle = tb.getcol('RECEPTOR_ANGLE')
+            new_feed_angle = np.zeros(feed_angle.shape)
+            tb.putcol('RECEPTOR_ANGLE', new_feed_angle)
+            tb.close()
+
             feedswap.run(logger, split_ms, output_dir, fields=[0], filename=f"feedswap_{target}.txt")
             flag.run(logger, obs_id, split_ms, output_dir, 'target')
 
@@ -128,7 +142,6 @@ for obs_id in obs_ids:
         #cal_ms.cal_lib(obs_id, logger, "J1939-6342", output_dir)
         ms_prep.apply_cal(logger, obs_id, targets, output_dir)
         ms_prep.average_targets(logger, obs_id, targets, output_dir, chanbin=None, force=True)
-            #ms_prep.apply_cal(logger, obs_id, targets, output_dir)
         ms_prep.ionosphere_corr_target(logger, obs_id, targets, output_dir)
 
     ##########################################################
@@ -136,6 +149,7 @@ for obs_id in obs_ids:
     ##########################################################
 
     #targets = ['virgo038', 'virgo040']
+    #targets = ['virgo083']
     if current_step <= 6:
         selfcal.run(logger, obs_id, targets, output_dir)
 
@@ -144,8 +158,7 @@ for obs_id in obs_ids:
     ##########################################################
 
     #targets = ['virgo023']: M87 is already peeled don't run again!
-    #targets = ['virgo064', 'virgo084']
-    targets = ['virgo084']
+    
     if current_step <= 7:
         peel_m87.run(logger, obs_id, targets, output_dir)
 
@@ -162,16 +175,27 @@ for obs_id in obs_ids:
     log.log_obs_footer(logger, obs_id)
     # log.log_obs_footer_google_doc(obs_id, doc_name_plots)
 
+    try:
+        logger.info(f'Copying results for {obs_id} from working directory to /lofar...')
+        if os.path.exists(f'/lofar/bba5268/meerkat_virgo/{obs_id}'):
+            os.system(f'rm -rf /lofar/bba5268/meerkat_virgo/{obs_id}')
+        os.system(f'rsync -avPh --append-verify {output_dir} /lofar/bba5268/meerkat_virgo/{obs_id}')
 
-'''if current_step <= 9:
-    obs_ids = []
-    targets = []
-    rmsynth_target.run(logger, obs_ids, targets, output_dir, mode='single')
-'''
+        if args.delete_workdir:
+            logger.info(f'Deleting working directory for {obs_id}...')
+            os.system(f'rm -rf {output_dir}')
+    except Exception as e:
+        logger.exception(f"Error while copying/deleting data for observation {obs_id}")'''
+
+if args.do_rmsynth:
+    obs_ids = ['obs25','obs26','obs28']
+    targets = ['virgo083','virgo064','virgo084','virgo062']
+    rmsynth_target.run(logger, obs_ids, targets, full_ms, output_dir, mode='mosaic')
+
 ####
 #toDo: 
-#      - script copying data to /beegfs and unzipping it for processing
-#      - add multiple qualtity check to pipeline (maybe use apache airflow)--> include leakage sol, XY YX in time, rms vs beam size vs dynamical range
+#      - add multiple quality check to pipeline (maybe use apache airflow)--> include leakage sol, XY YX in time, rms vs beam size vs dynamical range
+#      - add a step to move everything to /lofar (if calibration went well) and delete from /beegfs or /localwork (leave target images on /beegfs or /localwork for rmsynth)
 ####
 
 

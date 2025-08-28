@@ -6,12 +6,11 @@ import glob
 import time
 
 ##############################Command definitions#####################################################
-def get_target_from_obs_id(logger, obs_id):
+def get_target_from_obs_id(logger, full_ms, obs_id):
     from casatools import msmetadata
     """
-    Get all traget names from the given obs_id.
+    Get all target names from the given obs_id.
     """
-    full_ms = glob.glob(f'/beegfs/bba5268/meerkat_virgo/raw/{obs_id}*sdp_l0.ms')[0]
 
     msmd = msmetadata()
     msmd.open(full_ms)
@@ -31,24 +30,66 @@ def get_target_from_obs_id(logger, obs_id):
             targets.append(field)
     
     return targets
-    
+
+#----------------------------------------------------------------------------------------
+
+def pad_mosaic(logger, obs_id_str, path):
+    import glob
+    from astropy.io import fits
+    import numpy as np
+    """
+    Pad all mosaic images to a common size.
+    Use NaNs for padding.
+    """
+    logger.info('Checking if mosaic images have same size...')
+    images = glob.glob(f'{path}/../mosaics/mosaic_{obs_id_str}_*-image-pb.fits')
+    max_shape = [0, 0]
+    for im in images:
+        with fits.open(im) as hdu:
+            max_shape[0] = max(max_shape[0], hdu[0].data.shape[0])
+            max_shape[1] = max(max_shape[1], hdu[0].data.shape[1])
+    if max_shape[0] == 0 or max_shape[1] == 0:
+        logger.info('No mosaic images found.')
+        return
+    logger.info(f'Max mosaic shape: {max_shape}')
+
+    for i in images:
+        with fits.open(i, mode='update') as hdu:
+            data = hdu[0].data
+            header = hdu[0].header
+
+            padded = np.full(max_shape, np.nan)
+            padded[:data.shape[0], :data.shape[1]] = data
+
+            if 'CRPIX1' in header and 'CRPIX2' in header:
+                header['CRPIX1'] += (max_shape[1] - data.shape[1]) // 2
+                header['CRPIX2'] += (max_shape[0] - data.shape[0]) // 2
+            header['NAXIS1'] = max_shape[1]
+            header['NAXIS2'] = max_shape[0]
+
+            hdu[0].data = padded
+            hdu.flush()
+            logger.info(f"Padded {i} to shape {max_shape}")
+
 #---------------------------------------------------------------------------------------
 
-def make_mosaic(logger, mosaic_obs_ids, mosaic_targets, output_dir):
+def make_mosaic(logger, obs_ids, targets, full_ms):
     import glob
+    from astropy.io import fits
+    import numpy as np
     """
     Create a mosaic of the specified targets from the given observation IDs.
     If no targets are specified, it will use all targets from the obs_ids.
     """
-    if mosaic_targets == []:
-        logger.info(f'make_mosaic: No targets specified, using all targets from obs_ids {mosaic_obs_ids}')
-        for obs_id in mosaic_obs_ids:
-            mosaic_targets.extend(get_target_from_obs_id(logger, obs_id))
+    if targets == []:
+        logger.info(f'make_mosaic: No targets specified, using all targets from obs_ids {obs_ids}')
+        for obs_id in obs_ids:
+            targets.extend(get_target_from_obs_id(logger, full_ms, obs_id))
     else:
-        logger.info(f'make_mosaic: Using specified targets {mosaic_targets}')
+        logger.info(f'make_mosaic: Using specified targets {targets}')
 
     
-    def gather_images(mosaic_targets, stokes, num):
+    def gather_images(targets, stokes, num):
         """
         Gather all images for the specified Stokes parameter and image number.
         Done for all targets in the mosaic_targets list.
@@ -58,30 +99,52 @@ def make_mosaic(logger, mosaic_obs_ids, mosaic_targets, output_dir):
             num_str = num
         else:
             num_str = str(num).zfill(4)
-        for obs_id in mosaic_obs_ids:
-            for target in mosaic_targets:
-                pattern = f'{obs_id}/TARGET_IMAGES/{obs_id}_{target}_pol-{num_str}-{stokes}-image-pb.fits'
+        for obs_id in obs_ids:
+            for target in targets:
+                pattern = f'{obs_id}/TARGET_IMAGES/{obs_id}_{target}_pol-{num_str}-{stokes}-image-pb-cut.fits'
                 images.extend(glob.glob(pattern))
         return images
     
-    obs_id_str = "_".join(mosaic_obs_ids)
+    obs_id_str = "_".join(obs_ids)
     for num in range(100):
         num_str = str(num).zfill(4)
         for stokes in ['Q', 'U', 'I']:
-            image_list = gather_images(mosaic_targets, stokes, num)
+            image_list = gather_images(targets, stokes, num)
             logger.info(f'make_mosaic: Found {len(image_list)} images for Stokes {stokes} and image number {num_str}')
-            if len(image_list) > 1:
+            skip_mosaic = False
+            for im in image_list:
+                try:
+                    data = fits.getdata(im)
+                    if data is None or np.all(np.isnan(data)):
+                        logger.info(f"Skipping mosaic for {stokes} {num_str}: {im} is fully NaN")
+                        skip_mosaic = True
+                        break
+                except Exception as e:
+                    logger.error(f"Could not read {im}: {e}")
+            if len(image_list) > 1 and skip_mosaic == False:
+                images_str = " ".join(image_list)
                 output_mosaic = f'mosaics/mosaic_{obs_id_str}_{num_str}-{stokes}-image-pb.fits'
-                cmd = f'python3.10 /angelina/meerkat_virgo/scripts_fra/mosaic.py --images {image_list} --output {output_mosaic}'
+                cmd = f'python3.10 /angelina/meerkat_virgo/scripts_fra/mosaic.py --images {images_str} --output {output_mosaic}'
                 stdout, stderr = utils.run_command(cmd, logger)
                 logger.info(stdout)
                 if stderr:
                     logger.error(f"Error in mosaic.py: {stderr}")
-    image_list = gather_images(mosaic_targets, 'I', 'MFS')
+    image_list = gather_images(targets, 'I', 'MFS')
     logger.info(f'Make mosaic out of the MFS Stokes I images. Found {len(image_list)} images')
-    if len(image_list) > 1:
+    skip_mosaic = False
+    for im in image_list:
+        try:
+            data = fits.getdata(im)
+            if data is None or np.all(np.isnan(data)):
+                logger.info(f"Skipping mosaic for MFS I: {im} is fully NaN")
+                skip_mosaic = True
+                break
+        except Exception as e:
+            logger.error(f"Could not read {im}: {e}")
+    if len(image_list) > 1 and skip_mosaic == False:
+        images_str = " ".join(image_list)
         output_mosaic = f'mosaics/mosaic_{obs_id_str}_MFS-I-image-pb.fits'
-        cmd = f'python3.10 /angelina/meerkat_virgo/scripts_fra/mosaic.py --images {image_list} --output {output_mosaic}'
+        cmd = f'python3.10 /angelina/meerkat_virgo/scripts_fra/mosaic.py --images {images_str} --output {output_mosaic}'
         stdout, stderr = utils.run_command(cmd, logger)
         logger.info(stdout)
         if stderr:
@@ -100,30 +163,31 @@ def make_cubes(logger, obs_id, target, path, obs_id_str=None, mode='single'):
 
     #noise_center = [816,801]
     #noise_box = [216,143]
-    noise_center = [200,200]
-    noise_box = [143,143]
-    #noise_center = [1781, 532]
-    #noise_box = [123, 82]
+    #noise_center = [200,900]
+    #noise_box = [143,143]
+    noise_center = [1077, 1117]
+    noise_box = [245, 245]
 
     if mode == 'single':
         logger.info('make_cubes: processing single Stokes I, Q and U images')
 
         im_name = f'{path}/TARGET_IMAGES/{obs_id}_{target}_pol-'
         cube_name = f'{path}/STOKES_CUBES/{obs_id}_{target}_'
-        files=glob.glob(im_name+'0*Q*image-pb.fits')
+        files=glob.glob(im_name+'0*Q*image-pb-cut.fits')
+        MFS_I = im_name + 'MFS-I-image-pb-cut.fits'
 
     elif mode == 'mosaic':
         logger.info(f'make_cubes: processing mosaic Stokes I, Q and U images')
         if obs_id_str is not None:
             im_name = f'mosaics/mosaic_{obs_id_str}_'
-            cube_name = f'mosaics/mosaic_{obs_id_str}_'
+            cube_name = f'mosaics/stokes_cubes/mosaic_{obs_id_str}_'
             files=glob.glob(im_name+'0*Q*image-pb.fits')
+            MFS_I = im_name + 'MFS-I-image-pb.fits'
         else:
             logger.error('Error in make_cubes: obs_id_str must be provided for mosaic mode')
             raise ValueError("obs_id_str must be provided for mosaic mode")
 
-
-    MFS_I = im_name + 'MFS-I-image-pb.fits'           
+           
     output_cube = cube_name + 'IQUV-'
     head = fits.open(MFS_I)[0].header
 
@@ -172,28 +236,28 @@ def make_cubes(logger, obs_id, target, path, obs_id_str=None, mode='single'):
                 else:
                     logger.error('Error in make_cubes: RMS calculation failed for Q and U images')
     
-                array_rms_q = np.array(rms_q)
-                array_rms_u = np.array(rms_u)
-                rms_p= np.sqrt(array_rms_q**2 + array_rms_u**2)
-                array_freq = np.array(freq)
-                array_q = np.array(img_q)
-                array_u = np.array(img_u)
-                array_i= np.array(img_i)
+    array_rms_q = np.array(rms_q)
+    array_rms_u = np.array(rms_u)
+    rms_p= np.sqrt(array_rms_q**2 + array_rms_u**2)
+    array_freq = np.array(freq)
+    array_q = np.array(img_q)
+    array_u = np.array(img_u)
+    array_i= np.array(img_i)
 
-                logger.info(f'make_cubes: writing Stokes cubes {output_cube}Q_cube.fits, {output_cube}U_cube.fits, {output_cube}I_cube.fits')
-                fits.writeto(output_cube+'Q_cube.fits', array_q, header=head, overwrite=True)
-                fits.writeto(output_cube+'U_cube.fits', array_u, header=head, overwrite=True)
-                fits.writeto(output_cube+'I_cube.fits', array_i, header=head, overwrite=True)
+    logger.info(f'make_cubes: writing Stokes cubes {output_cube}Q_cube.fits, {output_cube}U_cube.fits, {output_cube}I_cube.fits')
+    fits.writeto(output_cube+'Q_cube.fits', array_q, header=head, overwrite=True)
+    fits.writeto(output_cube+'U_cube.fits', array_u, header=head, overwrite=True)
+    fits.writeto(output_cube+'I_cube.fits', array_i, header=head, overwrite=True)
 
-                f_rms = open(output_cube+'rms.txt', 'w')
-                np.savetxt(f_rms, rms_p)
-                f_rms.close()
-                logger.info(f' make_cube: Writing {output_cube}rms.txt')
+    f_rms = open(output_cube+'rms.txt', 'w')
+    np.savetxt(f_rms, rms_p)
+    f_rms.close()
+    logger.info(f' make_cube: Writing {output_cube}rms.txt')
 
-                f_freq= open(output_cube+'freq.txt', 'w')
-                np.savetxt(f_freq, array_freq)
-                f_freq.close()
-                logger.info(f'make_cube: writing {output_cube}freq.txt')
+    f_freq= open(output_cube+'freq.txt', 'w')
+    np.savetxt(f_freq, array_freq)
+    f_freq.close()
+    logger.info(f'make_cube: writing {output_cube}freq.txt')
 
 
 #-------------------------------------------------------------------
@@ -202,19 +266,19 @@ def stokesI_model(obs_id, target, path, obs_id_str=None, mode='single'):
     import numpy as np
     from astropy.io import fits
     """
-    create a background subtracted stokes I image to use for the RM synthesis
+    create a background subtracted stokes I image to use for RM synthesis
     """
     if mode == 'single':
         output_cube = f'{path}/STOKES_CUBES/{obs_id}_{target}_'
     elif mode == 'mosaic':
-        output_cube = f'mosaics/mosaic_{obs_id_str}_'
+        output_cube = f'mosaics/stokes_cubes/mosaic_{obs_id_str}_'
     
     hdul = fits.open(output_cube + 'IQUV-I_cube.fits')
     data = hdul[0].data
     masked_data = np.empty_like(data)
 
-    noise_center = [200,200]
-    noise_box = [143,143]
+    noise_center = [1077, 1117]
+    noise_box = [245, 245]
     #noise_center = [816,801]
     #noise_box = [216,143]
     #noise_center = [1781, 532]
@@ -288,7 +352,7 @@ def rm_synth_param(obs_id, target, path, logger, obs_id_str=None, mode='single')
         freq_list = np.loadtxt(output_cube + 'IQUV-freq.txt')
         rms_list = np.loadtxt(output_cube + 'IQUV-rms.txt')
     elif mode == 'mosaic':
-        output_cube = f'mosaics/mosaic_{obs_id_str}_'
+        output_cube = f'mosaics/stokes_cubes/mosaic_{obs_id_str}_'
         freq_list = np.loadtxt(output_cube + 'IQUV-freq.txt')
         rms_list = np.loadtxt(output_cube + 'IQUV-rms.txt')
 
@@ -320,7 +384,7 @@ def StokesI_MFS_noise(obs_id, target, logger, path, obs_id_str=None, mode='singl
     """
     if mode == 'single':
         im_name = f'{path}/TARGET_IMAGES/{obs_id}_{target}_pol-'
-        MFS_I = im_name + 'MFS-I-image-pb.fits'
+        MFS_I = im_name + 'MFS-I-image-pb-cut.fits'
     elif mode == 'mosaic':
         im_name = f'mosaics/mosaic_{obs_id_str}_'
         MFS_I = im_name + 'MFS-I-image-pb.fits'
@@ -328,8 +392,8 @@ def StokesI_MFS_noise(obs_id, target, logger, path, obs_id_str=None, mode='singl
 
     #noise_center = [816,801]
     #noise_box = [216,143]
-    noise_center = [200,200]
-    noise_box = [143,143]
+    noise_center = [1077, 1117]
+    noise_box = [245, 245]
     #noise_center = [686, 3866]
     #noise_box = [300, 230]
 
@@ -354,11 +418,11 @@ def get_grm_map(obs_id, target, logger, path, obs_id_str=None, mode='single'):
     determine the Galactic RM map from Hutschenreuther+20 for the region of the given image/mosaic.
     This map will be matched in size and pixel scale to the image fro pixel by pixel subtraction
     '''
-    grm_map = glob.glob('/beegfs/bba5268/meerkat_virgo/FaradaySky_SH_image2.fits')
+    grm_map = glob.glob('/lofar/bba5268/meerkat_virgo/faraday_sky/FaradaySky_SH_image2.fits')
     logger.info(f'found grm map: {grm_map}')
 
     if mode == 'single':
-        image = glob.glob(f'{path}/TARGET_IMAGES/{obs_id}_{target}_pol-MFS-I-image-pb.fits')
+        image = glob.glob(f'{path}/TARGET_IMAGES/{obs_id}_{target}_pol-MFS-I-image-pb-cut.fits')
         outmap = f'{path}/STOKES_CUBES/FaradaySky_{obs_id}_{target}.fits'
     elif mode == 'mosaic':
         image = glob.glob(f'mosaics/mosaic_{obs_id_str}_MFS-I-image-pb.fits')
@@ -398,7 +462,7 @@ def final_rm_synth(obs_id, target, sigma_p, d_phi, logger, path, obs_id_str=None
     if mode == 'single':
         name_out = f'{path}/STOKES_CUBES/{obs_id}_{target}-final'
     elif mode == 'mosaic':
-        name_out = f'mosaics/mosaic_{obs_id_str}-final'
+        name_out = f'mosaics/final/mosaic_{obs_id_str}-final'
     name_rm_cluster = name_out+'_RM.fits' #... name of RM image corrected for the Milky Way contribution
     name_err_rm_cluster = name_out+'_err_RM.fits' # name of error RM image
     name_p = name_out+'_P.fits' #... name of polarization image
@@ -412,10 +476,10 @@ def final_rm_synth(obs_id, target, sigma_p, d_phi, logger, path, obs_id_str=None
         name_u = f'{path}/STOKES_CUBES/{obs_id}_{target}-FDF_clean_im.fits'
         name_i = f'{path}/STOKES_CUBES/{obs_id}_{target}_IQUV-I_cube.fits'
     elif mode == 'mosaic':
-        name_tot = f'mosaics/mosaic_{obs_id_str}-FDF_clean_tot.fits'
-        name_q = f'mosaics/mosaic_{obs_id_str}-FDF_clean_real.fits'
-        name_u = f'mosaics/mosaic_{obs_id_str}-FDF_clean_im.fits'
-        name_i = f'mosaics/mosaic_{obs_id_str}_IQUV-I_cube.fits'
+        name_tot = f'mosaics/stokes_cubes/mosaic_{obs_id_str}-FDF_clean_tot.fits'
+        name_q = f'mosaics/stokes_cubes/mosaic_{obs_id_str}-FDF_clean_real.fits'
+        name_u = f'mosaics/stokes_cubes/mosaic_{obs_id_str}-FDF_clean_im.fits'
+        name_i = f'mosaics/stokes_cubes/mosaic_{obs_id_str}_IQUV-I_cube.fits'
 
     #open input images
 
@@ -522,19 +586,19 @@ def plot_results(obs_id, target, logger, path, obs_id_str=None, mode='single', s
         name_pola = f'{path}/STOKES_CUBES/{obs_id}_{target}-final_pola.fits'
         name_rm = f'{path}/STOKES_CUBES/{obs_id}_{target}-final_RM.fits'
         name_err_rm = f'{path}/STOKES_CUBES/{obs_id}_{target}-final_err_RM.fits'
-        name_stokesI = f'{path}/TARGET_IMAGES/{obs_id}_{target}_pol-0000-I-image-pb.fits'
+        name_stokesI = f'{path}/TARGET_IMAGES/{obs_id}_{target}_pol-0000-I-image-pb-cut.fits'
 
         freq_list = np.loadtxt(f'{path}/STOKES_CUBES/{obs_id}_{target}_IQUV-freq.txt')
 
     elif mode == 'mosaic':
-        name_p = f'mosaics/mosaic_{obs_id_str}-final_P.fits'
-        name_polf = f'mosaics/mosaic_{obs_id_str}-final_polf.fits'
-        name_pola = f'mosaics/mosaic_{obs_id_str}-final_pola.fits'
-        name_rm = f'mosaics/mosaic_{obs_id_str}-final_RM.fits'
-        name_err_rm = f'mosaics/mosaic_{obs_id_str}-final_err_RM.fits'
+        name_p = f'mosaics/final/mosaic_{obs_id_str}-final_P.fits'
+        name_polf = f'mosaics/final/mosaic_{obs_id_str}-final_polf.fits'
+        name_pola = f'mosaics/final/mosaic_{obs_id_str}-final_pola.fits'
+        name_rm = f'mosaics/final/mosaic_{obs_id_str}-final_RM.fits'
+        name_err_rm = f'mosaics/final/mosaic_{obs_id_str}-final_err_RM.fits'
         name_stokesI = f'mosaics/mosaic_{obs_id_str}_MFS-I-image-pb.fits'
 
-        freq_list = np.loadtxt(f'mosaics/mosaic_{obs_id_str}_IQUV-freq.txt')
+        freq_list = np.loadtxt(f'mosaics/stokes_cubes/mosaic_{obs_id_str}_IQUV-freq.txt')
 
     mean_freq = 1.284e9 #mean frequency in Hz
     hdu_I = fits.open(name_stokesI)
@@ -603,10 +667,10 @@ def plot_results(obs_id, target, logger, path, obs_id_str=None, mode='single', s
     if mode == 'single':
         plt.savefig(f'{path}/PLOTS/{obs_id}_{target}_RMsynth_param_conv.png')
     elif mode == 'mosaic':
-        plt.savefig(f'mosaics/mosaic_{obs_id_str}_RMsynth_param_conv.png')
+        plt.savefig(f'mosaics/final/mosaic_{obs_id_str}_RMsynth_param_conv.png')
 #---------------------------------------------------------------------------
 
-def run(logger, obs_ids, targets, path, mode='single'):
+def run(logger, obs_ids, targets, full_ms, path, mode='single'):
     from casatools import msmetadata
     import numpy as np
     """
@@ -625,130 +689,152 @@ def run(logger, obs_ids, targets, path, mode='single'):
     #log.append_to_google_doc("######################################################", "", warnings="", plot_link="", doc_name="ViMS Pipeline Plots")
     #log.append_to_google_doc("IMAGE POLCAL", "Started", warnings="", plot_link="")
 
+    obsid_to_targets = {}
+    for obs_id in obs_ids:
+        obsid_to_targets[obs_id] = get_target_from_obs_id(logger, full_ms, obs_id)
+    
+    valid_pairs = [
+        (obs_id, target)
+        for obs_id in obs_ids
+        for target in targets
+        if target in obsid_to_targets[obs_id]
+        ]
+
 
     if mode == 'mosaic':
         try:
             logger.info("\n\n\n\n\n")
             logger.info("IMAGE POL TARGET: creating mosaic of images...")
-            mosaic_obs_id_str = make_mosaic(logger, obs_ids, targets, path)
+            #mosaic_obs_id_str = make_mosaic(logger, obs_ids, targets, path)
+            mosaic_obs_id_str = 'obs25_obs26_obs28'
             logger.info('IMAGE POL TARGET: finished creating mosaic of images')
             logger.info("")
             logger.info("")
             logger.info("")
         except Exception as e:
             logger.exception("Error while creating mosaic of images")
+
+        try:
+            logger.info("\n\n\n\n\n")
+            logger.info("IMAGE POL TARGET: pad mosaic to same size...")
+            #pad_mosaic(logger, mosaic_obs_id_str, path)
+            logger.info('IMAGE POL TARGET: finished padding mosaic to same size')
+            logger.info("")
+            logger.info("")
+            logger.info("")
+        except Exception as e:
+            logger.exception("Error while padding mosaic to same size")
     
     elif mode == 'single':
         mosaic_obs_id_str = None
         logger.info("IMAGE POL TARGET: running in single mode, no mosaic created")
 
     if mode == 'single':
-        for obs_id in obs_ids:
-            for target in targets:
+        for obs_id, target in valid_pairs:
 
-                # create Image cubes and model of Stokes I image
-                try:
-                    logger.info("\n\n\n\n\n")
-                    logger.info("IMAGE POL TARGET: creating image cubes for single targets...")
-                    make_cubes(logger, obs_id, target, path, mosaic_obs_id_str, mode)
-                    logger.info('IMAGE POL TARGET: finished creating image cubes')
-                    logger.info("")
-                    logger.info("")
-                    logger.info("")
-                    #log.append_to_google_doc('IMAGE POLCAL', 'Finished creating image cubes', warnings="", plot_link="", doc_name="ViMS Pipeline Plots")
-                except Exception as e:
-                    logger.exception("Error while creating image cubes")
+            # create Image cubes and model of Stokes I image
+            try:
+                logger.info("\n\n\n\n\n")
+                logger.info("IMAGE POL TARGET: creating image cubes for single targets...")
+                #make_cubes(logger, obs_id, target, path, mosaic_obs_id_str, mode)
+                logger.info('IMAGE POL TARGET: finished creating image cubes')
+                logger.info("")
+                logger.info("")
+                logger.info("")
+                #log.append_to_google_doc('IMAGE POLCAL', 'Finished creating image cubes', warnings="", plot_link="", doc_name="ViMS Pipeline Plots")
+            except Exception as e:
+                logger.exception("Error while creating image cubes")
     
-                #normalize Stokes Q and U cubes by Stokes I cube
-                try:
-                    logger.info("\n\n\n\n\n")
-                    logger.info("IMAGE POL TARGET: Creating Stokes I model from Stokes I cube...")
-                    stokesI_model(obs_id, target, path, mosaic_obs_id_str, mode)
-                    logger.info('IMAGE POL TARGET: finished creating Stokes I model')
-                    logger.info("")
-                    logger.info("")
-                    logger.info("")
-                except Exception as e:
-                    logger.exception("Error while creating Stokes I model")
-                    #log.append_to_google_doc('IMAGE POLCAL', 'Finished normalizing Stokes Q and U cubes by Stokes I cube', warnings="", plot_link="", doc_name="ViMS Pipeline Plots")
+            #normalize Stokes Q and U cubes by Stokes I cube
+            try:
+                logger.info("\n\n\n\n\n")
+                logger.info("IMAGE POL TARGET: Creating Stokes I model from Stokes I cube...")
+                stokesI_model(obs_id, target, path, mosaic_obs_id_str, mode)
+                logger.info('IMAGE POL TARGET: finished creating Stokes I model')
+                logger.info("")
+                logger.info("")
+                logger.info("")
+            except Exception as e:
+                logger.exception("Error while creating Stokes I model")
+                #log.append_to_google_doc('IMAGE POLCAL', 'Finished normalizing Stokes Q and U cubes by Stokes I cube', warnings="", plot_link="", doc_name="ViMS Pipeline Plots")
     
-                #calculate RM synthesis parameters
-                try:
-                    logger.info("\n\n\n\n\n")
-                    logger.info("IMAGE POL TARGET: calculating RM synthesis parameters...")
-                    d_phi, phi_max, W_far, sigma_p, sigma_RM = rm_synth_param(obs_id, target, path, logger, mosaic_obs_id_str, mode)
-                    logger.info('IMAGE POL TARGET: finished calculating RM synthesis parameters')
-                    logger.info("") 
-                    logger.info("")
-                    logger.info("")
-                    #log.append_to_google_doc('IMAGE POLCAL', 'Finished calculating RMsynth paramters', warnings="", plot_link="", doc_name="ViMS Pipeline Plots")
-                except Exception as e:
-                    logger.exception("Error while calculating RM synthesis parameters")
+            #calculate RM synthesis parameters
+            try:
+                logger.info("\n\n\n\n\n")
+                logger.info("IMAGE POL TARGET: calculating RM synthesis parameters...")
+                d_phi, phi_max, W_far, sigma_p, sigma_RM = rm_synth_param(obs_id, target, path, logger, mosaic_obs_id_str, mode)
+                logger.info('IMAGE POL TARGET: finished calculating RM synthesis parameters')
+                logger.info("") 
+                logger.info("")
+                logger.info("")
+                #log.append_to_google_doc('IMAGE POLCAL', 'Finished calculating RMsynth paramters', warnings="", plot_link="", doc_name="ViMS Pipeline Plots")
+            except Exception as e:
+                logger.exception("Error while calculating RM synthesis parameters")
 
-                        #run rmsynth3d
-                try:
-                    logger.info("\n\n\n\n\n")
-                    logger.info("IMAGE POL TARGET: running rmsynth3d...")
-                    cube_name = f'{path}/STOKES_CUBES/{obs_id}_{target}_IQUV-'
-                    rm_name = f'{obs_id}_{target}-'
-                    cmd = f"export PYTHONPATH=/opt/RM-Tools:$PYTHONPATH && python3.10 /opt/RM-Tools/RMtools_3D/do_RMsynth_3D.py {cube_name}Q_cube.fits {cube_name}U_cube.fits {cube_name}freq.txt -i {cube_name}I_masked.fits -n {cube_name}rms.txt -v -l {phi_max} -s 30 -w 'variance' -o {rm_name}"
-                    logger.info(f"IMAGE POL TARGET: Executing command: {cmd}")
-                    stdout, stderr = utils.run_command(cmd, logger)
-                    logger.info(stdout)
-                    if stderr:
-                        logger.error(f"Error in RMsynth: {stderr}")
-                    logger.info("IMAGE POL TARGET: finished rmsynth3d")
-                    logger.info("")
-                    logger.info("")
-                    logger.info("")
-                    #log.append_to_google_doc("IMAGE POLCAL", "Finished RMsynth3d", warnings="", plot_link="", doc_name="ViMS Pipeline Plots")
-                except Exception as e:
-                    logger.exception("Error while running rmsynth3d")
+            #run rmsynth3d
+            try:
+                logger.info("\n\n\n\n\n")
+                logger.info("IMAGE POL TARGET: running rmsynth3d...")
+                cube_name = f'{path}/STOKES_CUBES/{obs_id}_{target}_IQUV-'
+                rm_name = f'{obs_id}_{target}-'
+                cmd = f"export PYTHONPATH=/opt/RM-Tools:$PYTHONPATH && python3.10 /opt/RM-Tools/RMtools_3D/do_RMsynth_3D.py {cube_name}Q_cube.fits {cube_name}U_cube.fits {cube_name}freq.txt -i {cube_name}I_masked.fits -n {cube_name}rms.txt -v -l {phi_max} -s 30 -w 'variance' -o {rm_name}"
+                logger.info(f"IMAGE POL TARGET: Executing command: {cmd}")
+                stdout, stderr = utils.run_command(cmd, logger)
+                logger.info(stdout)
+                if stderr:
+                    logger.error(f"Error in RMsynth: {stderr}")
+                logger.info("IMAGE POL TARGET: finished rmsynth3d")
+                logger.info("")
+                logger.info("")
+                logger.info("")
+                #log.append_to_google_doc("IMAGE POLCAL", "Finished RMsynth3d", warnings="", plot_link="", doc_name="ViMS Pipeline Plots")
+            except Exception as e:
+                logger.exception("Error while running rmsynth3d")
 
-                try:
-                    logger.info("\n\n\n\n\n")
-                    logger.info("IMAGE POL TARGET: running rmclean3d...")
-                    fdf_name = f'{path}/STOKES_CUBES/{obs_id}_{target}-FDF_tot_dirty.fits'
-                    rmsf_name = f'{path}/STOKES_CUBES/{obs_id}_{target}-RMSF_tot.fits'
-                    out_name = f'{obs_id}_{target}-'
-                    cmd = f"export PYTHONPATH=/opt/RM-Tools:$PYTHONPATH && python3.10 /opt/RM-Tools/RMtools_3D/do_RMclean_3D.py {fdf_name} {rmsf_name} -c {7*sigma_p} -v -o {out_name}"
-                    logger.info(f"IMAGE POL TARGET: Executing command: {cmd}")
-                    stdout, stderr = utils.run_command(cmd, logger)
-                    logger.info(stdout)
-                    if stderr:
-                        logger.error(f"Error in RMsynth: {stderr}")
-                    logger.info("IMAGE POL TARGET: finished rmclean3d")
-                    logger.info("")
-                    logger.info("")
-                    logger.info("")
-                    #log.append_to_google_doc("IMAGE POLCAL", "Finished RMsynth3d", warnings="", plot_link="", doc_name="ViMS Pipeline Plots")
-                except Exception as e:
-                    logger.exception("Error while running rmclean3d")
+            try:
+                logger.info("\n\n\n\n\n")
+                logger.info("IMAGE POL TARGET: running rmclean3d...")
+                fdf_name = f'{path}/STOKES_CUBES/{obs_id}_{target}-FDF_tot_dirty.fits'
+                rmsf_name = f'{path}/STOKES_CUBES/{obs_id}_{target}-RMSF_tot.fits'
+                out_name = f'{obs_id}_{target}-'
+                cmd = f"export PYTHONPATH=/opt/RM-Tools:$PYTHONPATH && python3.10 /opt/RM-Tools/RMtools_3D/do_RMclean_3D.py {fdf_name} {rmsf_name} -c {7*sigma_p} -v -o {out_name}"
+                logger.info(f"IMAGE POL TARGET: Executing command: {cmd}")
+                stdout, stderr = utils.run_command(cmd, logger)
+                logger.info(stdout)
+                if stderr:
+                    logger.error(f"Error in RMsynth: {stderr}")
+                logger.info("IMAGE POL TARGET: finished rmclean3d")
+                logger.info("")
+                logger.info("")
+                logger.info("")
+                #log.append_to_google_doc("IMAGE POLCAL", "Finished RMsynth3d", warnings="", plot_link="", doc_name="ViMS Pipeline Plots")
+            except Exception as e:
+                logger.exception("Error while running rmclean3d")
 
-                try:
-                    logger.info("\n\n\n\n\n")
-                    logger.info("IMAGE POL TARGET: running final RM synth...")
-                    final_rm_synth(obs_id, target, sigma_p, d_phi, logger, path, mosaic_obs_id_str, mode)
-                    logger.info('IMAGE POL TARGET: finished final RM synth')
-                    logger.info("")
-                    logger.info("")
-                    logger.info("")
-                    #log.append_to_google_doc('IMAGE POLCAL', 'Finished final RM synth', warnings="", plot_link="", doc_name="ViMS Pipeline Plots")
-                except Exception as e:
-                    logger.exception("Error while running final RM synth")
+            try:
+                logger.info("\n\n\n\n\n")
+                logger.info("IMAGE POL TARGET: running final RM synth...")
+                final_rm_synth(obs_id, target, sigma_p, d_phi, logger, path, mosaic_obs_id_str, mode)
+                logger.info('IMAGE POL TARGET: finished final RM synth')
+                logger.info("")
+                logger.info("")
+                logger.info("")
+                #log.append_to_google_doc('IMAGE POLCAL', 'Finished final RM synth', warnings="", plot_link="", doc_name="ViMS Pipeline Plots")
+            except Exception as e:
+                logger.exception("Error while running final RM synth")
 
-                #calculate the results for the source region and plot them as a png
-                try:
-                    logger.info("\n\n\n\n\n")
-                    logger.info("IMAGE POL TARGET: plotting results...")
-                    plot_results(obs_id, target, logger, path, mosaic_obs_id_str, mode)
-                    logger.info('IMAGE POL TARGET: finished plotting results')
-                    logger.info("")
-                    logger.info("")
-                    logger.info("")
-                    #log.append_to_google_doc('IMAGE POLCAL', 'Finished plotting results', warnings="", plot_link="", doc_name="ViMS Pipeline Plots")
-                except Exception as e:
-                    logger.exception("Error while plotting results")
+            #calculate the results for the source region and plot them as a png
+            try:
+                logger.info("\n\n\n\n\n")
+                logger.info("IMAGE POL TARGET: plotting results...")
+                plot_results(obs_id, target, logger, path, mosaic_obs_id_str, mode)
+                logger.info('IMAGE POL TARGET: finished plotting results')
+                logger.info("")
+                logger.info("")
+                logger.info("")
+                #log.append_to_google_doc('IMAGE POLCAL', 'Finished plotting results', warnings="", plot_link="", doc_name="ViMS Pipeline Plots")
+            except Exception as e:
+                logger.exception("Error while plotting results")
 
 
     elif mode == 'mosaic':
@@ -794,14 +880,53 @@ def run(logger, obs_ids, targets, path, mode='single'):
         try:
             logger.info("\n\n\n\n\n")
             logger.info("IMAGE POL TARGET: running rmsynth3d...")
-            cube_name = f'mosaics/mosaic_{mosaic_obs_id_str}_IQUV-'
+            cube_name = f'mosaics/stokes_cubes/mosaic_{mosaic_obs_id_str}_IQUV-'
             rm_name = f'mosaic_{mosaic_obs_id_str}-'
-            cmd = f"export PYTHONPATH=/opt/RM-Tools:$PYTHONPATH && python3.10 /opt/RM-Tools/RMtools_3D/do_RMsynth_3D.py {cube_name}Q_cube.fits {cube_name}U_cube.fits {cube_name}freq.txt -i {cube_name}I_masked.fits -n {cube_name}rms.txt -v -l {phi_max} -s 30 -w 'variance' -o {rm_name}"
+            fdf_name = f'mosaics/stokes_cubes/mosaic_{mosaic_obs_id_str}-FDF_tot_dirty.fits'
+            rmsf_name = f'mosaics/stokes_cubes/mosaic_{mosaic_obs_id_str}-RMSF_tot.fits'
+            out_name = f'mosaic_{mosaic_obs_id_str}-'
+            for i in ['Q', 'U']:
+                cmd = f"export PYTHONPATH=/opt/RM-Tools:$PYTHONPATH && python3.10 /opt/RM-Tools/RMtools_3D/create_chunks.py {cube_name}{i}_cube.fits 3000000"
             logger.info(f"IMAGE POL TARGET: Executing command: {cmd}")
             stdout, stderr = utils.run_command(cmd, logger)
             logger.info(stdout)
             if stderr:
-                logger.error(f"Error in RMsynth: {stderr}")
+                logger.error(f"Error in creating chunks: {stderr}")
+            cmd = f"export PYTHONPATH=/opt/RM-Tools:$PYTHONPATH && python3.10 /opt/RM-Tools/RMtools_3D/create_chunks.py {cube_name}I_masked.fits 3000000"
+            logger.info(f"IMAGE POL TARGET: Executing command: {cmd}")
+            stdout, stderr = utils.run_command(cmd, logger)
+            logger.info(stdout)
+            if stderr:
+                logger.error(f"Error in creating chunks: {stderr}")
+            chunks = glob.glob(f'{cube_name}Q_cube.C*.fits')
+            for i in range(len(chunks)):
+                cmd = f"export PYTHONPATH=/opt/RM-Tools:$PYTHONPATH && python3.10 /opt/RM-Tools/RMtools_3D/do_RMsynth_3D.py {cube_name}Q_cube.C{i}.fits {cube_name}U_cube.C{i}.fits {cube_name}freq.txt -i {cube_name}I_masked.C{i}.fits -n {cube_name}rms.txt -v -l {phi_max} -s 30 -w 'variance' -o {rm_name}"
+                logger.info(f"IMAGE POL TARGET: Executing command: {cmd}")
+                stdout, stderr = utils.run_command(cmd, logger)
+                logger.info(stdout)
+                if stderr:
+                    logger.error(f"Error in RMsynth: {stderr}")
+                cmd = f"export PYTHONPATH=/opt/RM-Tools:$PYTHONPATH && python3.10 /opt/RM-Tools/RMtools_3D/do_RMclean_3D.py {fdf_name} {rmsf_name} -c {7*sigma_p} -v -o {out_name}"
+                logger.info(f"IMAGE POL TARGET: Executing command: {cmd}")
+                stdout, stderr = utils.run_command(cmd, logger)
+                logger.info(stdout)
+                if stderr:
+                    logger.error(f"Error in RMclean: {stderr}")
+                suffixes = ['FDF_clean_real.fits', 'FDF_clean_im.fits', 'FDF_clean_tot.fits', 'FDF_CC_real.fits', 'FDF_CC_im.fits', 'FDF_CC_tot.fits']
+
+                for suffix in suffixes:
+                    old_name = f'{out_name}{suffix}'
+                    chunk_suffix = f'.C{i}.fits'
+                    new_name = f'{out_name}{suffix.replace(".fits", chunk_suffix)}'
+                    if os.path.exists(old_name):
+                        os.rename(old_name, new_name)
+                        logger.info(f"Renamed {old_name} to {new_name}")
+                    cmd = f"export PYTHONPATH=/opt/RM-Tools:$PYTHONPATH && python3.10 /opt/RM-Tools/RMtools_3D/assemble_chunks.py mosaics/{new_name}"
+                    logger.info(f"IMAGE POL TARGET: Executing command: {cmd}")
+                    stdout, stderr = utils.run_command(cmd, logger)
+                    logger.info(stdout)
+                    if stderr:
+                        logger.error(f"Error in assembling chunks: {stderr}")
             logger.info("IMAGE POL TARGET: finished rmsynth3d")
             logger.info("")
             logger.info("")
@@ -810,25 +935,10 @@ def run(logger, obs_ids, targets, path, mode='single'):
         except Exception as e:
             logger.exception("Error while running rmsynth3d")
 
-        try:
-            logger.info("\n\n\n\n\n")
-            logger.info("IMAGE POL TARGET: running rmclean3d...")
-            fdf_name = f'mosaics/mosaic_{mosaic_obs_id_str}-FDF_tot_dirty.fits'
-            rmsf_name = f'mosaics/mosaic_{mosaic_obs_id_str}-RMSF_tot.fits'
-            out_name = f'mosaic_{mosaic_obs_id_str}-'
-            cmd = f"export PYTHONPATH=/opt/RM-Tools:$PYTHONPATH && python3.10 /opt/RM-Tools/RMtools_3D/do_RMclean_3D.py {fdf_name} {rmsf_name} -c {7*sigma_p} -v -o {out_name}"
-            logger.info(f"IMAGE POL TARGET: Executing command: {cmd}")
-            stdout, stderr = utils.run_command(cmd, logger)
-            logger.info(stdout)
-            if stderr:
-                logger.error(f"Error in RMsynth: {stderr}")
-            logger.info("IMAGE POL TARGET: finished rmclean3d")
-            logger.info("")
-            logger.info("")
-            logger.info("")
-            #log.append_to_google_doc("IMAGE POLCAL", "Finished RMsynth3d", warnings="", plot_link="", doc_name="ViMS Pipeline Plots")
-        except Exception as e:
-            logger.exception("Error while running rmclean3d")
+        
+
+            
+
 
 
         try:

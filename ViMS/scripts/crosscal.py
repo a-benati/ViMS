@@ -3,6 +3,7 @@
 import numpy as np
 from casatasks import *
 from casatools import table
+#from scripts_fra import applycal
 from utils import utils
 
 
@@ -102,20 +103,20 @@ def xyamb(logger, xytab, xyout=''):
     time.sleep(1)
 
 #----------------------------------------------------------------------------------
-def ionosphere_rm(logger, pol_ms, obs_id, path):
+def ionosphere_rm(logger, pol_ms, obs_id, path, caltype='polcal'):
     from pathlib import Path
     from spinifex import h5parm_tools
     from spinifex.vis_tools import ms_tools
     import os
     """
-    Calculate the ionospheric RM for the polarisation calibrator and create a h5param file.
+    Calculate the ionospheric RM for the specified calibrator and create a h5param file.
     """
 
     ms_path = Path(pol_ms)
     ms_metadata = ms_tools.get_metadata_from_ms(ms_path)
 
     rms = ms_tools.get_rm_from_ms(ms_path, use_stations=ms_metadata.station_names)
-    h5parm_name = f"{path}/CAL_TABLES/{obs_id}_polcal.h5parm"
+    h5parm_name = f"{path}/CAL_TABLES/{obs_id}_{caltype}.h5parm"
     if os.path.exists(h5parm_name):
         logger.info(f"ionosphere_rm: Found {h5parm_name}. Deleting it.")
         os.system(f"rm -rf {h5parm_name}")
@@ -124,17 +125,18 @@ def ionosphere_rm(logger, pol_ms, obs_id, path):
     return h5parm_name
 
 #----------------------------------------------------------------------------------
-def crosscal(logger, obs_id, cal_ms, pol_ms, path, ref_ant='m000'):
+def crosscal(logger, obs_id, cal_ms, pol_ms, path, band, cal_roles, ref_ant):
     import numpy as np
     import os,sys
+    import glob
     from scripts import flag
-    from casatasks import gaincal, setjy, bandpass, clearcal, polcal, flagmanager, applycal, flagdata, tclean
+    from casatasks import gaincal, setjy, bandpass, clearcal, polcal, flagmanager, applycal, flagdata, tclean, fringefit
     from casatools import table
     """
     do crosscalibration and polarisation calibration for the given ms file.
     Adjusted from strategy of Benjamin Hugo and Annalisa Bonafede
     """
-
+    tb = table()
     calms = cal_ms
     obs = obs_id
 
@@ -143,10 +145,12 @@ def crosscal(logger, obs_id, cal_ms, pol_ms, path, ref_ant='m000'):
     gtab_p = path+'/CAL_TABLES/'+obs+'_calib.gcal_p'
     gtab_a = path+'/CAL_TABLES/'+obs+'_calib.gcal_a'
     btab = path+'/CAL_TABLES/'+obs+'_calib.bandpass'
+    fringetab = path+'/CAL_TABLES/'+obs+'_calib.fringe'
     ktab2 = path+'/CAL_TABLES/'+obs+'_calib.kcal2'
     gtab_p2 = path+'/CAL_TABLES/'+obs+'_calib.gcal_p2'
     gtab_a2 = path+'/CAL_TABLES/'+obs+'_calib.gcal_a2'
     btab2 = path+'/CAL_TABLES/'+obs+'_calib.bandpass2'
+    fringetab2 = path+'/CAL_TABLES/'+obs+'_calib.fringe2'
     ktab_sec = path+'/CAL_TABLES/'+obs+'_calib.kcal.sec'
     gtab_sec_p = path+'/CAL_TABLES/'+obs+'_calib.gcal_p.sec'
     Ttab_sec = path+'/CAL_TABLES/'+obs+'_calib.T.sec'
@@ -165,20 +169,17 @@ def crosscal(logger, obs_id, cal_ms, pol_ms, path, ref_ant='m000'):
     ###################################################################
     #get names of the fields from table
 
-    tb = table()
-    tb.open(calms+ "/FIELD")
-    field_names = tb.getcol("NAME")
-    tb.close()
+    fcal = [cal for cal, roles in cal_roles.items() if 'flux' in roles]
+    bpcal = [cal for cal, roles in cal_roles.items() if 'bandpass' in roles]
+    leakcal = 'J1939-6342'
+    gcal = [cal for cal, roles in cal_roles.items() if 'gain' in roles]
+    xcal = [cal for cal, roles in cal_roles.items() if 'polarization' in roles]
 
-    fcal = field_names[1]
-    bpcal = field_names[1]
-    gcal = field_names[0]
-
-    #get name of the polcal
-    tb.open(pol_ms+ "/FIELD")
-    field_names_pol = tb.getcol("NAME")
-    tb.close()
-    xcal = field_names_pol[0]
+    logger.info(f"crosscal: Using flux cal: {fcal}")
+    logger.info(f"crosscal: Using bandpass cal: {bpcal}")
+    logger.info(f"crosscal: Using gain cal: {gcal}")
+    logger.info(f"crosscal: Using pol cal: {xcal}")
+    logger.info(f"crosscal: Processing {band}-band data")
 
 
     ################################################################
@@ -255,58 +256,112 @@ def crosscal(logger, obs_id, cal_ms, pol_ms, path, ref_ant='m000'):
     # Set model for flux and polarisation calibrator
 
 
-    for cal in set(fcal.split(',')+bpcal.split(',')):
+    for cal in list(set(fcal + bpcal)):
+        if band == 'L':
+            if cal == 'J1939-6342':
+                logger.info('crosscal: setting L-band model for flux calibrator J1939-6342')
+                setjy(vis = calms, field = cal, spw = "", selectdata = False, timerange = "", scan = "", \
+                    standard = 'Stevens-Reynolds 2016', scalebychan = True, useephemdir = False, usescratch = True)
+            
+            else:
+                logger.error(f"crosscal: Unknown L-Band calibrator, insert model in the script please {cal}")
+                sys.exit()
+        
+        elif band == 'UHF':
+            if cal == 'J0408-6545':
+                logger.info('crosscal: setting UHF-band model for flux calibrator J0408-6545')
+                cmd = f"crystalball {calms} -sm /angelina/meerkat_virgo/ViMS/ViMS/utils/J0408-6545_UHF.txt -f {cal} -j 2"
+                stdout, stderr = utils.run_command(cmd, logger)
+                logger.info(stdout)
+                if stderr:
+                    logger.error(f"Error in crystalball: {stderr}")
+            
+            elif cal == 'J1939-6342':
+                logger.info('crosscal: setting UHF-band model for flux calibrator J1939-6342')
+                cmd = f"crystalball {calms} -sm /angelina/meerkat_virgo/ViMS/ViMS/utils/J1939-6342_UHF.txt -f {cal} -j 2"
+                stdout, stderr = utils.run_command(cmd, logger)
+                logger.info(stdout)
+                if stderr:
+                    logger.error(f"Error in crystalball: {stderr}")
+            else:
+                logger.error(f"crosscal: Unknown UHF-Band calibrator, insert model in the script please {cal}")
+                sys.exit()
 
-        if cal == 'J1939-6342':
-            logger.info('crosscal: setting model for flux calibrator J1939-6342')
-            setjy(vis = calms, field = "{0}".format(fcal), spw = "", selectdata = False, timerange = "", scan = "", \
-                standard = 'Stevens-Reynolds 2016', scalebychan = True, useephemdir = False, usescratch = True)
-
-        else:
-            logger.error("corsscal: Unknown calibrator, insert model in the script please ", cal)
-            sys.exit()
 
 #-------------------------------------------------------------
 
-    for cal in set(xcal.split(',')):
-        
-        if cal =='J1331+3030':
-            logger.info('crosscal: setting model for polarisation calibrator J1331+3030')
+    for cal in set(xcal):
+        if band == 'L':
+            if cal =='J1331+3030':
+                logger.info('crosscal: setting L-band model for polarisation calibrator J1331+3030')
 
-            reffreq = '1.284GHz'
-            # Stokes flux density in Jy
-            I =  15.74331687
-            Q = 0.8628247336
-            U = 1.248991241
-            V = 0   
-            # Spectral Index in 2nd order
-            alpha =   [-0.4881438633844231, -0.17025582235426978]
+                reffreq = '1.284GHz'
+                # Stokes flux density in Jy
+                I =  15.74331687
+                Q = 0.8628247336
+                U = 1.248991241
+                V = 0   
+                # Spectral Index in 2nd order
+                alpha =   [-0.4881438633844231, -0.17025582235426978]
 
-            setjy(vis=pol_ms,
-                field=xcal,
-                selectdata=False,
-                scalebychan=True,
-                standard="manual",
-                listmodels=False,
-                fluxdensity=[I,Q,U,V],
-                spix=alpha,
-                reffreq=reffreq,
-                polindex=[0.0964244115642966, 0.018277345381024372, -0.07332409550519345, 0.3253188415787851, -0.37228554528542385],
-                polangle=[0.48312994184873537, 0.12063061722082152, -0.04180094935296229, 0.12832951565823608],
-                rotmeas=0.12,
-                useephemdir=False,
-                interpolation="nearest",
-                usescratch=True,
-                ismms=False,
-                )
-        else:
-            logger.error("crosscal: Unknown polarisation calibrator, insert model in the script please ", cal)
-            sys.exit()
+                setjy(vis=pol_ms,
+                    field=cal,
+                    selectdata=False,
+                    scalebychan=True,
+                    standard="manual",
+                    listmodels=False,
+                    fluxdensity=[I,Q,U,V],
+                    spix=alpha,
+                    reffreq=reffreq,
+                    polindex=[0.0964244115642966, 0.018277345381024372, -0.07332409550519345, 0.3253188415787851, -0.37228554528542385],
+                    polangle=[0.48312994184873537, 0.12063061722082152, -0.04180094935296229, 0.12832951565823608],
+                    rotmeas=0.12,
+                    useephemdir=False,
+                    interpolation="nearest",
+                    usescratch=True,
+                    ismms=False,
+                    )
+            else:
+                logger.error("crosscal: Unknown polarisation calibrator, insert model in the script please ", cal)
+                sys.exit()
+
+        elif band == 'UHF':
+            if cal == 'J1331+3030':
+                logger.info('crosscal: setting UHF-band model for polarisation calibrator J1331+3030')
+
+                reffreq = '0.815GHz'
+                # Stokes flux density in Jy
+                I =  19.351063871541818
+                Q = 0.8347844177
+                U = 0.9128064214
+                V = 0   
+                # Spectral Index in 2nd order
+                alpha =   [-0.417487011305929471, -0.1914822651588793]
+
+                setjy(vis=pol_ms,
+                    field=cal,
+                    selectdata=False,
+                    scalebychan=True,
+                    standard="manual",
+                    listmodels=False,
+                    fluxdensity=[I,Q,U,V],
+                    spix=alpha,
+                    reffreq=reffreq,
+                    polindex=[0.06392231767823678, 0.10424821100704243, -0.09782204297443398, 0.133111830793712728, -0.1602040594783645],
+                    polangle=[0.4150069737497867, 0.2498279378166478, -0.8760106185516333, 4.889377596672348, -10.295119761980102],
+                    rotmeas=0.12,
+                    useephemdir=False,
+                    interpolation="nearest",
+                    usescratch=True,
+                    ismms=False,
+                    )
+            else:
+                logger.error("crosscal: Unknown polarisation calibrator, insert model in the script please ", cal)
+                sys.exit()
 
     ####################################################################
-    # Ionospehric corruption of the polcal model
+    # Ionospheric corruption of the polcal model and each bpcal model
     #calculate ionospheric roatation measure with spinifix and corrupt the model with dp3
-
 
     h5parm = ionosphere_rm(logger, pol_ms, obs_id, path)
 
@@ -315,9 +370,12 @@ def crosscal(logger, obs_id, cal_ms, pol_ms, path, ref_ant='m000'):
     logger.info(stdout)
     if stderr:
         logger.error(f"Error in DP3: {stderr}")
-
+    
     ###################################################################
     # crosscalibration of the primary calibrator
+    bpcals = ','.join(bpcal)
+    gcals = ','.join(gcal)
+    xcals = ','.join(xcal)
 
     logger.info("")
     logger.info('crosscal: Starting crosscalibration of the primary following the calibration scheme KGBFKGB')
@@ -325,44 +383,62 @@ def crosscal(logger, obs_id, cal_ms, pol_ms, path, ref_ant='m000'):
 
     # Delay calibration
     gaincal(vis = calms, caltable = ktab, selectdata = True,\
-        solint = "inf", field = bpcal, combine = "scan",uvrange='',\
+        solint = "inf", field = bpcals, combine = "",uvrange='',\
         refant = ref_ant, solnorm = False, gaintype = "K", refantmode='strict',\
         minsnr=3,parang = False)
 
-    os.system(f'/opt/ragavi-env/bin/ragavi-gains --table {ktab} --field 1 --htmlname {path}/PLOTS/{obs}_Kcal --plotname {path}/PLOTS/{obs}_Kcal.png')
+    os.system(f'/opt/ragavi-env/bin/ragavi-gains --table {ktab} --field {bpcals} --htmlname {path}/PLOTS/{obs}_Kcal --plotname {path}/PLOTS/{obs}_Kcal.png')
 
     # phase cal on bandpass calibrator
-    gaincal(vis = calms, caltable = gtab_p, selectdata = True,\
-        solint = "60s", field = bpcal, combine = "", refantmode='strict',\
-        refant = ref_ant, gaintype = "G", calmode = "p",uvrange='',\
-        gaintable = [ktab], gainfield = [''], interp = [''],parang = False)
+    for i in range(np.size(bpcal)):
+        if i == 0: append=False
+        if i > 0: append=True
+        gaincal(vis = calms, caltable = gtab_p, selectdata = True,\
+            solint = "60s", field = bpcal[i], combine = "", refantmode='strict',\
+            refant = ref_ant, gaintype = "G", calmode = "p",uvrange='',\
+            gaintable = [ktab], gainfield = [''], interp = [''],parang = False, append=append)
 
-    # amplitude cal on bandpass calibrator
-    gaincal(vis = calms, caltable = gtab_a, selectdata = True,\
-        solint = "inf", field = bpcal, combine = "",\
-        refant = ref_ant, gaintype = "T", calmode = "a",uvrange='', refantmode='strict',\
-        gaintable = [ktab,gtab_p], gainfield = ['',''], interp = ['',''],parang = False)
+        # amplitude cal on bandpass calibrator
+        gaincal(vis = calms, caltable = gtab_a, selectdata = True,\
+            solint = "inf", field = bpcal[i], combine = "",\
+            refant = ref_ant, gaintype = "T", calmode = "a",uvrange='', refantmode='strict',\
+            gaintable = [ktab,gtab_p], gainfield = ['',bpcal[i]], interp = ['',''],parang = False, append=append)
+        
+        if band == 'UHF':
+            #add additional phase calibration to account for Ionospheric errors at low frequencies
+            fringefit(vis= calms, caltable=fringetab, field=bpcal[i], solint='inf', spw='', timerange='', scan='',\
+                      refant=ref_ant, gaintable=[ktab, gtab_p, gtab_a], gainfield=['', bpcal[i], bpcal[i]],\
+                      minsnr=50, append=append, parang=False, uvrange='')
 
-    os.system(f'/opt/ragavi-env/bin/ragavi-gains --table {gtab_a} --field 1 -o {path}/PLOTS/{obs}_Gcal_amp -p {path}/PLOTS/{obs}_Gcal_amp.png')
-    os.system(f'/opt/ragavi-env/bin/ragavi-gains --table {gtab_p} --field 1 -o {path}/PLOTS/{obs}_Gcal_phase -p {path}/PLOTS/{obs}_Gcal_phase.png')
+            # bandpass cal on bandpass calibrator
+            bandpass(vis = calms, caltable = btab, selectdata = True,\
+                solint = "inf", field = bpcal[i], combine = "", uvrange='',\
+                refant = ref_ant, solnorm = False, bandtype = "B",\
+                gaintable = [ktab,gtab_p,gtab_a, fringetab], gainfield = ['',bpcal[i],bpcal[i], bpcal[i]],\
+                parang = False, append=append)
 
-    # bandpass cal on bandpass calibrator
-    bandpass(vis = calms, caltable = btab, selectdata = True,\
-            solint = "inf", field = bpcal, combine = "scan", uvrange='',\
-            refant = ref_ant, solnorm = False, bandtype = "B",\
-        gaintable = [ktab,gtab_p,gtab_a], gainfield = ['','',''],\
-        interp = ['','',''], parang = False)
+            applycal(vis=calms, field=bpcal[i], gaintable=[ktab,gtab_p,gtab_a, fringetab,btab], gainfield=['',bpcal[i],bpcal[i],bpcal[i],bpcal[i]], applymode='calflag', flagbackup=False)
+        
+        else:
+            # bandpass cal on bandpass calibrator
+            bandpass(vis = calms, caltable = btab, selectdata = True,\
+                solint = "inf", field = bpcal[i], combine = "", uvrange='',\
+                refant = ref_ant, solnorm = False, bandtype = "B",\
+                gaintable = [ktab,gtab_p,gtab_a], gainfield = ['',bpcal[i],bpcal[i]],\
+                parang = False, append=append)
 
-    os.system(f'/opt/ragavi-env/bin/ragavi-gains --table {btab} --field 1 -o {path}/PLOTS/{obs}_Bpcal -p {path}/PLOTS/{obs}_Bpcal.png')
- 
-    applycal(vis=calms, field=bpcal, gaintable=[ktab,gtab_p,gtab_a,btab], applymode='calflag', flagbackup=False)
+            applycal(vis=calms, field=bpcal[i], gaintable=[ktab,gtab_p,gtab_a,btab], gainfield=['',bpcal[i],bpcal[i],bpcal[i]], applymode='calflag', flagbackup=False)
 
-    os.system(f'/opt/shadems-env/bin/shadems {calms} -x CORRECTED_DATA:phase -y CORRECTED_DATA:amp -c CORR --corr XX,YY --field {bpcal} --dir {path}/PLOTS --png {obs}_{bpcal}_crosscal_XXYY.png')
-    os.system(f'/opt/shadems-env/bin/shadems {calms} -x FREQ -y CORRECTED_DATA:amp -c CORR --corr XY,YX --field {bpcal} --dir {path}/PLOTS --png {obs}_{bpcal}_crosscal_XYYX.png')
+        os.system(f'/opt/shadems-env/bin/shadems {calms} -x CORRECTED_DATA:phase -y CORRECTED_DATA:amp -c CORR --corr XX,YY --field {bpcal[i]} --dir {path}/PLOTS --png {obs}_{bpcal[i]}_crosscal_XXYY.png')
+        os.system(f'/opt/shadems-env/bin/shadems {calms} -x FREQ -y CORRECTED_DATA:amp -c CORR --corr XY,YX --field {bpcal[i]} --dir {path}/PLOTS --png {obs}_{bpcal[i]}_crosscal_XYYX.png')
+
+    os.system(f'/opt/ragavi-env/bin/ragavi-gains --table {gtab_a} --field {bpcals} -o {path}/PLOTS/{obs}_Gcal_amp -p {path}/PLOTS/{obs}_Gcal_amp.png')
+    os.system(f'/opt/ragavi-env/bin/ragavi-gains --table {gtab_p} --field {bpcals} -o {path}/PLOTS/{obs}_Gcal_phase -p {path}/PLOTS/{obs}_Gcal_phase.png')
+    os.system(f'/opt/ragavi-env/bin/ragavi-gains --table {btab} --field {bpcals} -o {path}/PLOTS/{obs}_Bpcal -p {path}/PLOTS/{obs}_Bpcal.png')
 
     #add flagging of Data and redoing crosscal on primary again
-    flagdata(vis=calms, mode="rflag", field=bpcal, datacolumn="corrected", quackinterval=0.0, timecutoff=4.0, freqcutoff=3.0, extendpols=False, flagbackup=False, outfile="",overwrite=True, extendflags=False)
-    flagdata(vis=calms, mode='extend', field=bpcal, datacolumn='corrected', growtime=80, growfreq=80, flagbackup=False)
+    flagdata(vis=calms, mode="rflag", field=bpcals, datacolumn="corrected", quackinterval=0.0, timecutoff=4.0, freqcutoff=3.0, extendpols=False, flagbackup=False, outfile="",overwrite=True, extendflags=False, correlation='XX,YY')
+    flagdata(vis=calms, mode='extend', field=bpcals, datacolumn='corrected', growtime=80, growfreq=80, flagbackup=False, correlation='XX,YY')
 
     if any(isinstance(entry, dict) and entry.get('name') == obs+'_flag_crosscal' for entry in flag_versions.values()):
         flagmanager(vis=calms, mode='delete', versionname=obs+'_flag_crosscal', merge='replace')
@@ -375,47 +451,91 @@ def crosscal(logger, obs_id, cal_ms, pol_ms, path, ref_ant='m000'):
     flag.log_flagsum(crosscal_flag, logger)
 
     # Refined delay calibration
-    gaincal(vis = calms, caltable = ktab2, selectdata = True,\
-        solint = "inf", field = bpcal, combine = "scan",uvrange='',\
-        refant = ref_ant, solnorm = False, gaintype = "K", refantmode='strict',\
-        minsnr=3,parang = False, gaintable=[btab, gtab_p, gtab_a])
+    if band == 'L':
+        gaincal(vis = calms, caltable = ktab2, selectdata = True,\
+            solint = "inf", field = bpcals, combine = "",uvrange='',\
+            refant = ref_ant, solnorm = False, gaintype = "K", refantmode='strict',\
+            minsnr=3,parang = False, gaintable=[gtab_p, gtab_a, btab])
+        
+        os.system(f'/opt/ragavi-env/bin/ragavi-gains --table {ktab2} --field {bpcals} -o {path}/PLOTS/{obs}_Kcal2 -p {path}/PLOTS/{obs}_Kcal2.png')
 
-    os.system(f'/opt/ragavi-env/bin/ragavi-gains --table {ktab2} --field 1 -o {path}/PLOTS/{obs}_Kcal2 -p {path}/PLOTS/{obs}_Kcal2.png')
+        for i in range(np.size(bpcal)):
+            if i == 0: append=False
+            if i > 0: append=True
 
-    # refined phase cal on bandpass calibrator
-    gaincal(vis = calms, caltable = gtab_p2, selectdata = True,\
-        solint = "60s", field = bpcal, combine = "",\
-        refant = ref_ant, gaintype = "G", calmode = "p",uvrange='',refantmode='strict',\
-        gaintable = [btab, ktab2], gainfield = ['',''], interp = ['',''],parang = False)
+            # refined phase cal on bandpass calibrator
+            gaincal(vis = calms, caltable = gtab_p2, selectdata = True,\
+                solint = "60s", field = bpcal[i], combine = "",\
+                refant = ref_ant, gaintype = "G", calmode = "p",uvrange='',refantmode='strict',\
+                gaintable = [ktab2, btab], gainfield = ['',bpcal[i]], interp = ['',''],parang = False, append=append)
 
-    gaincal(vis = calms, caltable = gtab_a2, selectdata = True,\
-        solint = "inf", field = bpcal, combine = "", refantmode='strict',\
-        refant = ref_ant, gaintype = "T", calmode = "a",uvrange='',\
-        gaintable = [btab, ktab2, gtab_p2], gainfield = ['','',''], interp = ['','',''],parang = False)
-
-    os.system(f'/opt/ragavi-env/bin/ragavi-gains --table {gtab_a2} --field 1 -o {path}/PLOTS/{obs}_Gcal_amp2 -p {path}/PLOTS/{obs}_Gcal_amp2.png')
-    os.system(f'/opt/ragavi-env/bin/ragavi-gains --table {gtab_p2} --field 1 -o {path}/PLOTS/{obs}_Gcal_phase2 -p {path}/PLOTS/{obs}_Gcal_phase2.png')
-
-    # refined bandpass cal on bandpass calibrator
-    bandpass(vis = calms, caltable = btab2, selectdata = True,\
-            solint = "inf", field = bpcal, combine = "scan", uvrange='',\
-            refant = ref_ant, solnorm = False, bandtype = "B",\
-        gaintable = [ktab2,gtab_p2,gtab_a2], gainfield = ['','',''],\
-        interp = ['','',''], parang = False)
-
-    os.system(f'/opt/ragavi-env/bin/ragavi-gains --table {btab2} --field 1 -o {path}/PLOTS/{obs}_Bpcal2 -p {path}/PLOTS/{obs}_Bpcal2.png')
+            gaincal(vis = calms, caltable = gtab_a2, selectdata = True,\
+                solint = "inf", field = bpcal[i], combine = "", refantmode='strict',\
+                refant = ref_ant, gaintype = "T", calmode = "a",uvrange='',\
+                gaintable = [ktab2, gtab_p2, btab], gainfield = ['',bpcal[i],bpcal[i]], interp = ['','',''],parang = False, append=append)
     
-    applycal(vis=calms, field=bpcal, gaintable=[ktab2,gtab_p2,gtab_a2,btab2], applymode='calflag', flagbackup=False)
+            # refined bandpass cal on bandpass calibrator
+            bandpass(vis = calms, caltable = btab2, selectdata = True,\
+                solint = "inf", field = bpcal[i], combine = "", uvrange='',\
+                refant = ref_ant, solnorm = False, bandtype = "B",\
+                gaintable = [ktab2,gtab_p2,gtab_a2], gainfield = ['',bpcal[i],bpcal[i]],\
+                parang = False, append=append)
 
-    os.system(f'/opt/shadems-env/bin/shadems {calms} -x CORRECTED_DATA:phase -y CORRECTED_DATA:amp -c CORR --corr XX,YY --field {bpcal} --dir {path}/PLOTS --png {obs}_{bpcal}_crosscal_XXYY_flagged.png')
-    os.system(f'/opt/shadems-env/bin/shadems {calms} -x FREQ -y CORRECTED_DATA:amp -c CORR --corr XY,YX --field {bpcal} --dir {path}/PLOTS --png {obs}_{bpcal}_crosscal_XYYX_flagged.png')
+            applycal(vis=calms, field=bpcal[i], gaintable=[ktab2,gtab_p2,gtab_a2,btab2], gainfield=['',bpcal[i],bpcal[i],bpcal[i]], applymode='calflag', flagbackup=False)
+
+            os.system(f'/opt/shadems-env/bin/shadems {calms} -x CORRECTED_DATA:phase -y CORRECTED_DATA:amp -c CORR --corr XX,YY --field {bpcal[i]} --dir {path}/PLOTS --png {obs}_{bpcal[i]}_crosscal_XXYY_flagged.png')
+            os.system(f'/opt/shadems-env/bin/shadems {calms} -x FREQ -y CORRECTED_DATA:amp -c CORR --corr XY,YX --field {bpcal[i]} --dir {path}/PLOTS --png {obs}_{bpcal[i]}_crosscal_XYYX_flagged.png')
+
+
+    elif band == 'UHF':
+        gaincal(vis = calms, caltable = ktab2, selectdata = True,\
+            solint = "inf", field = bpcals, combine = "",uvrange='',\
+            refant = ref_ant, solnorm = False, gaintype = "K", refantmode='strict',\
+            minsnr=3,parang = False, gaintable=[gtab_p, gtab_a,fringetab, btab])
+
+        os.system(f'/opt/ragavi-env/bin/ragavi-gains --table {ktab2} --field {bpcals} -o {path}/PLOTS/{obs}_Kcal2 -p {path}/PLOTS/{obs}_Kcal2.png')
+
+        for i in range(np.size(bpcal)):
+            if i == 0: append=False
+            if i > 0: append=True
+
+            # refined phase cal on bandpass calibrator
+            gaincal(vis = calms, caltable = gtab_p2, selectdata = True,\
+                solint = "60s", field = bpcal[i], combine = "",\
+                refant = ref_ant, gaintype = "G", calmode = "p",uvrange='',refantmode='strict',\
+                gaintable = [ktab2,fringetab, btab], gainfield = ['',bpcal[i], bpcal[i]],parang = False, append=append)
+
+            gaincal(vis = calms, caltable = gtab_a2, selectdata = True,\
+                solint = "inf", field = bpcal[i], combine = "", refantmode='strict',\
+                refant = ref_ant, gaintype = "T", calmode = "a",uvrange='',\
+                gaintable = [ktab2, gtab_p2, fringetab, btab], gainfield = ['',bpcal[i],bpcal[i], bpcal[i]],parang = False, append=append)
+
+            fringefit(vis= calms, caltable=fringetab2, field=bpcal[i], solint='inf', spw='', timerange='', scan='',\
+                      refant=ref_ant, gaintable=[ktab2, gtab_p2, gtab_a2, btab], gainfield=['', bpcal[i], bpcal[i], bpcal[i]],\
+                      minsnr=50, append=append, parang=False, uvrange='')
+        
+            # refined bandpass cal on bandpass calibrator
+            bandpass(vis = calms, caltable = btab2, selectdata = True,\
+                solint = "inf", field = bpcal[i], combine = "", uvrange='',\
+                refant = ref_ant, solnorm = False, bandtype = "B",\
+                gaintable = [ktab2,gtab_p2,gtab_a2, fringetab2], gainfield = ['',bpcal[i],bpcal[i],bpcal[i]],\
+                parang = False, append=append)
+
+            applycal(vis=calms, field=bpcal[i], gaintable=[ktab2,gtab_p2,gtab_a2,fringetab2,btab2], gainfield=['',bpcal[i],bpcal[i],bpcal[i],bpcal[i]], applymode='calflag', flagbackup=False)
+
+            os.system(f'/opt/shadems-env/bin/shadems {calms} -x CORRECTED_DATA:phase -y CORRECTED_DATA:amp -c CORR --corr XX,YY --field {bpcal[i]} --dir {path}/PLOTS --png {obs}_{bpcal[i]}_crosscal_XXYY_flagged.png')
+            os.system(f'/opt/shadems-env/bin/shadems {calms} -x FREQ -y CORRECTED_DATA:amp -c CORR --corr XY,YX --field {bpcal[i]} --dir {path}/PLOTS --png {obs}_{bpcal[i]}_crosscal_XYYX_flagged.png')
+
+    os.system(f'/opt/ragavi-env/bin/ragavi-gains --table {gtab_a2} --field {bpcals} -o {path}/PLOTS/{obs}_Gcal_amp2 -p {path}/PLOTS/{obs}_Gcal_amp2.png')
+    os.system(f'/opt/ragavi-env/bin/ragavi-gains --table {gtab_p2} --field {bpcals} -o {path}/PLOTS/{obs}_Gcal_phase2 -p {path}/PLOTS/{obs}_Gcal_phase2.png')
+    os.system(f'/opt/ragavi-env/bin/ragavi-gains --table {btab2} --field {bpcals} -o {path}/PLOTS/{obs}_Bpcal2 -p {path}/PLOTS/{obs}_Bpcal2.png')
 
     #####################################################################
     #Do two iterations of leakage calibration
 
     # flag corrceted data in XYYX and redo dfcal
-    flagdata(vis=calms, mode="rflag", datacolumn="corrected", field=bpcal, quackinterval=0.0, timecutoff=4.0, freqcutoff=3.0, extendpols=False, flagbackup=False, outfile="",overwrite=True, extendflags=False, correlation='XY,YX')
-    flagdata(vis=calms, mode='extend', datacolumn="corrected", field=bpcal, growtime=80, growfreq=80, flagbackup=False, growaround=True, flagnearfreq=True, correlation='XY,YX')
+    #flagdata(vis=calms, mode="rflag", datacolumn="corrected", field=bpcals, quackinterval=0.0, timecutoff=6.0, freqcutoff=6.0, extendpols=False, flagbackup=False, outfile="",overwrite=True, extendflags=False, correlation='XY,YX')
+    #flagdata(vis=calms, mode='extend', datacolumn="corrected", field=bpcals, growtime=80, growfreq=80, flagbackup=False, growaround=True, flagnearfreq=True, correlation='XY,YX')
 
     if any(isinstance(entry, dict) and entry.get('name') == obs+'_flag_before_df' for entry in flag_versions.values()):
         flagmanager(vis=calms, mode='delete', versionname=obs+'_flag_before_df', merge='replace')
@@ -423,14 +543,25 @@ def crosscal(logger, obs_id, cal_ms, pol_ms, path, ref_ant='m000'):
     flagmanager(vis=calms, mode='save', versionname=obs+'_flag_before_df', merge='replace')
     
 
-    # Calibrate Df
-    polcal(vis = calms, caltable = ptab_df, selectdata = True,\
-            solint = 'inf', field = bpcal, combine = '',\
+    if band == 'UHF':
+        # Calibrate Df
+        polcal(vis = calms, caltable = ptab_df, selectdata = True,\
+            solint = 'inf', field = leakcal, combine = '',\
+            refant = ref_ant, poltype = 'Dflls', preavg= 200.0,\
+            gaintable = [ktab2, gtab_p2,gtab_a2,fringetab2,btab2],\
+            gainfield = ['', leakcal, leakcal,leakcal, leakcal],\
+            #smodel=[14.8,0,0,0],\
+            interp = ['', 'nearest', 'nearest', 'nearest', 'nearest'])
+
+    else:
+        # Calibrate Df
+        polcal(vis = calms, caltable = ptab_df, selectdata = True,\
+            solint = 'inf', field = leakcal, combine = '',\
             refant = ref_ant, poltype = 'Dflls', preavg= 200.0,\
             gaintable = [ktab2, gtab_p2,gtab_a2,btab2],\
-            gainfield = ['', '', '',''],\
-            smodel=[14.8,0,0,0],\
-            interp = ['', '', '', ''])
+            gainfield = ['', leakcal, leakcal,leakcal],\
+            #smodel=[14.8,0,0,0],\
+            interp = ['', 'nearest', 'nearest', 'nearest'])
 
     # flag df solutions 
     flagdata(vis=ptab_df, mode='tfcrop',datacolumn="CPARAM", quackinterval=0.0,ntime="60s",combinescans=True,timecutoff=5.0, freqcutoff=3.0, usewindowstats="both", flagbackup=False)
@@ -440,30 +571,41 @@ def crosscal(logger, obs_id, cal_ms, pol_ms, path, ref_ant='m000'):
         logger.info("crosscal: Found 'flag_df'. Deleting it.")
     flagmanager(vis=ptab_df, mode='save', versionname=obs+'_flag_df', merge='replace')
 
-    os.system(f'/opt/ragavi-env/bin/ragavi-gains -x channel --table {ptab_df} --field 1 -o {path}/PLOTS/{obs}_Dfcal_flagged -p {path}/PLOTS/{obs}_Dfcal_flagged.png')
+    os.system(f'/opt/ragavi-env/bin/ragavi-gains -x channel --table {ptab_df} --field {leakcal} -o {path}/PLOTS/{obs}_Dfcal_flagged -p {path}/PLOTS/{obs}_Dfcal_flagged.png')
 
     # Apply Df to bpcal
-    applycal(vis=calms,field=bpcal,gaintable=[ktab2,gtab_p2,gtab_a2,btab2,ptab_df],parang=False, flagbackup=False)
+    if band == 'UHF':
+        applycal(vis=calms,field=leakcal,gaintable=[ktab2,gtab_p2,gtab_a2,fringetab2,btab2,ptab_df],gainfield = ['', leakcal, leakcal,leakcal,leakcal,''],interp=['','nearest','nearest','nearest','nearest',''], parang=False, flagbackup=False)
+    else:
+        applycal(vis=calms,field=leakcal,gaintable=[ktab2,gtab_p2,gtab_a2,btab2,ptab_df],gainfield = ['', leakcal, leakcal,leakcal,''],interp=['','nearest','nearest','nearest',''], parang=False, flagbackup=False)
 
     #flag corrected data in XYYX and redo dfcal
-    flagdata(vis=calms, mode="rflag", datacolumn="corrected", field=bpcal, quackinterval=0.0, timecutoff=4.0, freqcutoff=3.0, extendpols=False, flagbackup=False, outfile="",overwrite=True, extendflags=False, correlation='XY,YX')
-    flagdata(vis=calms, mode='extend', datacolumn="corrected", field=bpcal, growtime=80, growfreq=80, flagbackup=False, growaround=True, flagnearfreq=True, correlation='XY,YX')
+    flagdata(vis=calms, mode="rflag", datacolumn="corrected", field=leakcal, quackinterval=0.0, timecutoff=4.0, freqcutoff=3.0, extendpols=False, flagbackup=False, outfile="",overwrite=True, extendflags=False, correlation='XY,YX')
+    flagdata(vis=calms, mode='extend', datacolumn="corrected", field=leakcal, growtime=80, growfreq=80, flagbackup=False, growaround=True, flagnearfreq=True, correlation='XY,YX')
 
     if any(isinstance(entry, dict) and entry.get('name') == obs+'_flag_df_sec_iter' for entry in flag_versions.values()):
         flagmanager(vis=calms, mode='delete', versionname=obs+'_flag_df_sec_iter', merge='replace')
         logger.info("crosscal: Found 'flag_df_sec_iter'. Deleting it.")
     flagmanager(vis=calms, mode='save', versionname=obs+'_flag_df_sec_iter', merge='replace')
 
-
-    polcal(vis = calms, caltable = ptab_df2, selectdata = True,\
-            solint = 'inf', field = bpcal, combine = '', \
+    if band == 'UHF':
+        polcal(vis = calms, caltable = ptab_df2, selectdata = True,\
+            solint = 'inf', field = leakcal, combine = '', \
+            refant = ref_ant, poltype = 'Dflls', preavg= 200.0,\
+            gaintable = [ktab2, gtab_p2,gtab_a2,fringetab2,btab2],\
+            gainfield = ['', leakcal, leakcal,leakcal, leakcal],\
+            #smodel=[14.8,0,0,0],\
+            interp = ['', 'nearest', 'nearest', 'nearest', 'nearest'])
+    else:
+        polcal(vis = calms, caltable = ptab_df2, selectdata = True,\
+            solint = 'inf', field = leakcal, combine = '', \
             refant = ref_ant, poltype = 'Dflls', preavg= 200.0,\
             gaintable = [ktab2, gtab_p2,gtab_a2,btab2],\
-            gainfield = ['', '', '',''],\
-            smodel=[14.8,0,0,0],\
-            interp = ['', '', '', ''])
+            gainfield = ['', leakcal, leakcal,leakcal],\
+            #smodel=[14.8,0,0,0],\
+            interp = ['', 'nearest', 'nearest', 'nearest'])
 
-    os.system(f'/opt/ragavi-env/bin/ragavi-gains -x channel --table {ptab_df2} --field 1 -o {path}/PLOTS/{obs}_Dfcal_preflag2 -p {path}/PLOTS/{obs}_Dfcal_preflag2.png')
+    os.system(f'/opt/ragavi-env/bin/ragavi-gains -x channel --table {ptab_df2} --field {leakcal} -o {path}/PLOTS/{obs}_Dfcal_preflag2 -p {path}/PLOTS/{obs}_Dfcal_preflag2.png')
     
     flagdata(vis=ptab_df2, mode='tfcrop',datacolumn="CPARAM", quackinterval=0.0,ntime="60s",combinescans=True,timecutoff=5.0, freqcutoff=3.0, usewindowstats="both", flagbackup=False)
     df_flagversions2 = flagmanager(vis=ptab_df2, mode='list')
@@ -472,15 +614,18 @@ def crosscal(logger, obs_id, cal_ms, pol_ms, path, ref_ant='m000'):
         logger.info("corsscal: Found 'flag_df2'. Deleting it.")
     flagmanager(vis=ptab_df2, mode='save', versionname=obs+'_flag_df2', merge='replace')
 
-    os.system(f'/opt/ragavi-env/bin/ragavi-gains -x channel --table {ptab_df2} --field 1 -o {path}/PLOTS/{obs}_Dfcal_flagged2 -p {path}/PLOTS/{obs}_Dfcal_flagged2.png')
+    os.system(f'/opt/ragavi-env/bin/ragavi-gains -x channel --table {ptab_df2} --field {leakcal} -o {path}/PLOTS/{obs}_Dfcal_flagged2 -p {path}/PLOTS/{obs}_Dfcal_flagged2.png')
      
-    applycal(vis=calms,field=gcal,gaintable=[ktab2,gtab_p2,gtab_a2,btab2,ptab_df2],parang=False, flagbackup=False)
+    if band == 'UHF':
+        applycal(vis=calms,field=leakcal,gaintable=[ktab2,gtab_p2,gtab_a2,fringetab2,btab2,ptab_df2],parang=False, flagbackup=False)
+    else:
+        applycal(vis=calms,field=gcals,gaintable=[ktab2,gtab_p2,gtab_a2,btab2,ptab_df2],parang=False, flagbackup=False)
 
     # Check that amplitude of leakage cal is gone down (few %) after calibration
     #os.system(f'/opt/shadems-env/bin/shadems {calms} -x FREQ -y DATA:amp -c CORR --corr XY,YX --field {bpcal} --dir {path}/PLOTS --png {obs}_{bpcal}_Df-DATA.png')
-    os.system(f'/opt/shadems-env/bin/shadems {calms} -x FREQ -y CORRECTED_DATA:amp -c CORR --corr XY,YX --field {bpcal} --dir {path}/PLOTS --png {obs}_{bpcal}_Df-CORRECTED.png')
-    os.system(f'/opt/shadems-env/bin/shadems {calms} -x CORRECTED_DATA:phase -y CORRECTED_DATA:amp -c CORR --corr XX,YY --field {gcal} --dir {path}/PLOTS --png {obs}_{gcal}_crosscal_XXYY.png')
-    os.system(f'/opt/shadems-env/bin/shadems {calms} -x ANTENNA1 -y CORRECTED_DATA:real -c CORR --corr XY,YX --field {bpcal} --dir {path}/PLOTS --png {obs}_{bpcal}_Df-antenna_leakage.png')
+    os.system(f'/opt/shadems-env/bin/shadems {calms} -x FREQ -y CORRECTED_DATA:amp -c CORR --corr XY,YX --field {leakcal} --dir {path}/PLOTS --png {obs}_{leakcal}_Df-CORRECTED.png')
+    os.system(f'/opt/shadems-env/bin/shadems {calms} -x CORRECTED_DATA:phase -y CORRECTED_DATA:amp -c CORR --corr XX,YY --field {gcals} --dir {path}/PLOTS --png {obs}_{gcals}_crosscal_XXYY.png')
+    os.system(f'/opt/shadems-env/bin/shadems {calms} -x ANTENNA1 -y CORRECTED_DATA:real -c CORR --corr XY,YX --field {leakcal} --dir {path}/PLOTS --png {obs}_{leakcal}_Df-antenna_leakage.png')
 
     logger.info("")
     logger.info("crosscal: Finished calibration of the primary calibrator")
@@ -494,23 +639,23 @@ def crosscal(logger, obs_id, cal_ms, pol_ms, path, ref_ant='m000'):
 
     #  Calibrate Secondary -p  and T - amplitude normalized to 1
     gaincal(vis = calms, caltable = ktab_sec, selectdata = True,\
-        solint = "30min", field = gcal, combine = "scan",uvrange='',\
+        solint = "30min", field = gcals, combine = "scan",uvrange='',\
         refant = ref_ant, solnorm = False, gaintype = "K",\
         minsnr=3,parang = False, gaintable=[gtab_a2, btab2, ptab_df2])
 
     gaincal(vis = calms, caltable = gtab_sec_p, selectdata = True,\
-        solint = "inf", field = gcal, combine = "",\
+        solint = "inf", field = gcals, combine = "",\
         refant = ref_ant, gaintype = "G", calmode = "p",uvrange='',refantmode='strict',\
         gaintable = [ktab_sec, gtab_a2,btab2,ptab_df2], parang = False)
 
-    tclean(vis=calms,field=gcal,cell='0.5arcsec',imsize=512,niter=1000,imagename=path+'/CAL_IMAGES/'+obs+'_'+gcal+'-selfcal',weighting='briggs',robust=-0.2,datacolumn= 'corrected',deconvolver= 'mtmfs',\
+    tclean(vis=calms,field=gcals,cell='0.5arcsec',imsize=512,niter=1000,imagename=path+'/CAL_IMAGES/'+obs+'_'+gcals+'-selfcal',weighting='briggs',robust=-0.2,datacolumn= 'corrected',deconvolver= 'mtmfs',\
         nterms=2,specmode='mfs',interactive=False)
-    gaincal(vis=calms,field=gcal, calmode='p', solint='30s',caltable=gtab_sec_p+'-selfcal',refantmode='strict',\
+    gaincal(vis=calms,field=gcals, calmode='p', solint='30s',caltable=gtab_sec_p+'-selfcal',refantmode='strict',\
         refant=ref_ant,gaintype='G',gaintable = [ktab_sec, gtab_a2,btab2,ptab_df2], parang = False)
     gtab_sec_p=gtab_sec_p+"-selfcal"
 
-    flagdata(vis=calms, mode="rflag", field=gcal, datacolumn="residual", quackinterval=0.0, timecutoff=4.0, freqcutoff=3.0, extendpols=False, flagbackup=False, outfile="",overwrite=True, extendflags=False)
-    flagdata(vis=calms, mode='extend', field=gcal, datacolumn='residual', growtime=80, growfreq=80, flagbackup=False, growaround=True, flagnearfreq=True)
+    flagdata(vis=calms, mode="rflag", field=gcals, datacolumn="residual", quackinterval=0.0, timecutoff=4.0, freqcutoff=3.0, extendpols=False, flagbackup=False, outfile="",overwrite=True, extendflags=False)
+    flagdata(vis=calms, mode='extend', field=gcals, datacolumn='residual', growtime=80, growfreq=80, flagbackup=False, growaround=True, flagnearfreq=True)
 
     if any(isinstance(entry, dict) and entry.get('name') == obs+'_flag_after_df' for entry in flag_versions.values()):
         flagmanager(vis=calms, mode='delete', versionname=obs+'_flag_after_df', merge='replace')
@@ -522,43 +667,43 @@ def crosscal(logger, obs_id, cal_ms, pol_ms, path, ref_ant='m000'):
     flag.log_flagsum(df_cal_flag, logger)
 
     gaincal(vis = calms, caltable = ktab_sec, selectdata = True,\
-        solint = "30min", field = gcal, combine = "scan",uvrange='',\
+        solint = "30min", field = gcals, combine = "scan",uvrange='',\
         refant = ref_ant, solnorm = False, gaintype = "K",\
         minsnr=3,parang = False, gaintable=[gtab_a2, btab2, ptab_df2])
 
     gaincal(vis = calms, caltable = gtab_sec_p, selectdata = True,\
-        solint = "30s", field = gcal, combine = "",\
+        solint = "30s", field = gcals, combine = "",\
         refant = ref_ant, gaintype = "G", calmode = "p",uvrange='',refantmode='strict',\
         gaintable = [ktab_sec, gtab_a2,btab2,ptab_df2], parang = False)
 
     gaincal(vis = calms, caltable = Ttab_sec, selectdata = True,\
-        solint = "inf", field = gcal, combine = "",\
+        solint = "inf", field = gcals, combine = "",\
         refant = ref_ant, gaintype = "T", calmode = "ap",uvrange='',refantmode='strict',\
         solnorm=True, gaintable = [ktab_sec, gtab_sec_p,gtab_a2,btab2,ptab_df2], append=False, parang=False)
 
 
     # Check calibration of secondary
-    applycal(vis=calms, field=gcal, gaintable=[ktab_sec, gtab_sec_p,gtab_a2,btab2,Ttab_sec,ptab_df2], parang=False, flagbackup=False)
+    applycal(vis=calms, field=gcals, gaintable=[ktab_sec, gtab_sec_p,gtab_a2,btab2,Ttab_sec,ptab_df2], parang=False, flagbackup=False)
     #os.system(f'/opt/ragavi-env/bin/ragavi-vis --ms {calms} -x frequency -y amplitude -dc CORRECTED tbin 12000 -ca antenna1 --corr XY,YX --field {gcal} -o {path}/PLOTS/{obs}_{gcal}-Df-CORRECTED.png')
-    os.system(f'/opt/shadems-env/bin/shadems {calms} -x uv -y CORRECTED_DATA:amp -c ANTENNA1 --corr XX,YY --field {gcal} --dir {path}/PLOTS --png {obs}_{gcal}_amp_XXYY.png')
-    os.system(f'/opt/shadems-env/bin/shadems {calms} -x uv -y CORRECTED_DATA:phase -c ANTENNA1 --corr XX,YY --field {gcal} --dir {path}/PLOTS --png {obs}_{gcal}_phase_XXYY.png')
-    os.system(f'/opt/shadems-env/bin/shadems {calms} -x CORRECTED_DATA:phase -y CORRECTED_DATA:amp -c CORR --corr XX,YY  --field {gcal} --dir {path}/PLOTS --png {obs}_{gcal}_phaserefine_XXYY.png')
+    os.system(f'/opt/shadems-env/bin/shadems {calms} -x uv -y CORRECTED_DATA:amp -c ANTENNA1 --corr XX,YY --field {gcals} --dir {path}/PLOTS --png {obs}_{gcals}_amp_XXYY.png')
+    os.system(f'/opt/shadems-env/bin/shadems {calms} -x uv -y CORRECTED_DATA:phase -c ANTENNA1 --corr XX,YY --field {gcals} --dir {path}/PLOTS --png {obs}_{gcals}_phase_XXYY.png')
+    os.system(f'/opt/shadems-env/bin/shadems {calms} -x CORRECTED_DATA:phase -y CORRECTED_DATA:amp -c CORR --corr XX,YY  --field {gcals} --dir {path}/PLOTS --png {obs}_{gcals}_phaserefine_XXYY.png')
 
 
     #apply calibration up to  now to xcal: XY and YX will vary with time due to pang
-    applycal(vis=pol_ms,field=xcal,gaintable=[ktab2,gtab_p2,gtab_a2,btab2,Ttab_sec,ptab_df2],parang=False, flagbackup=False)
+    applycal(vis=pol_ms,field=xcals,gaintable=[ktab2,gtab_p2,gtab_a2,btab2,Ttab_sec,ptab_df2],parang=False, flagbackup=False)
 
-    flagdata(vis=pol_ms, mode="rflag", field=xcal, datacolumn="corrected", quackinterval=0.0, timecutoff=4.0, freqcutoff=3.0, extendpols=False, flagbackup=False, outfile="",overwrite=True, extendflags=False)
-    flagdata(vis=pol_ms, mode='extend', field=xcal, datacolumn='corrected', growtime=80, growfreq=80, flagbackup=False, growaround=True, flagnearfreq=True)
+    flagdata(vis=pol_ms, mode="rflag", field=xcals, datacolumn="corrected", quackinterval=0.0, timecutoff=4.0, freqcutoff=3.0, extendpols=False, flagbackup=False, outfile="",overwrite=True, extendflags=False)
+    flagdata(vis=pol_ms, mode='extend', field=xcals, datacolumn='corrected', growtime=80, growfreq=80, flagbackup=False, growaround=True, flagnearfreq=True)
     if any(isinstance(entry, dict) and entry.get('name') == obs+'_flag_before_xf' for entry in flag_versions.values()):
         flagmanager(vis=pol_ms, mode='delete', versionname=obs+'_flag_before_xf', merge='replace')
         logger.info("crosscal: Found 'flag_before_xf'. Deleting it.")
     flagmanager(vis=pol_ms, mode='save', versionname=obs+'_flag_before_xf', merge='replace')
 
 
-    os.system(f'/opt/shadems-env/bin/shadems {pol_ms} -x FREQ -y CORRECTED_DATA:phase -c CORR --corr XX,YY --field {xcal} --dir {path}/PLOTS --png {obs}_{xcal}_precalXf_XXYY.png')
-    os.system(f'/opt/shadems-env/bin/shadems {pol_ms} -x FREQ -y CORRECTED_DATA:amp -c CORR --corr XX,YY --field {xcal} --dir {path}/PLOTS --png {obs}_{xcal}_precalXf_XXYY_amp.png')
-    os.system(f'/opt/shadems-env/bin/shadems {pol_ms} -x TIME -y CORRECTED_DATA:amp -c CORR --corr XY,YX --field {xcal} --dir {path}/PLOTS --png {obs}_{xcal}_precalXf_XYYX.png')
+    os.system(f'/opt/shadems-env/bin/shadems {pol_ms} -x FREQ -y CORRECTED_DATA:phase -c CORR --corr XX,YY --field {xcals} --dir {path}/PLOTS --png {obs}_{xcals}_precalXf_XXYY.png')
+    os.system(f'/opt/shadems-env/bin/shadems {pol_ms} -x FREQ -y CORRECTED_DATA:amp -c CORR --corr XX,YY --field {xcals} --dir {path}/PLOTS --png {obs}_{xcals}_precalXf_XXYY_amp.png')
+    os.system(f'/opt/shadems-env/bin/shadems {pol_ms} -x TIME -y CORRECTED_DATA:amp -c CORR --corr XY,YX --field {xcals} --dir {path}/PLOTS --png {obs}_{xcals}_precalXf_XYYX.png')
 
     logger.info("")
     logger.info("crosscal: Finished calibration of the secondary calibrator")
@@ -571,38 +716,38 @@ def crosscal(logger, obs_id, cal_ms, pol_ms, path, ref_ant='m000'):
 
     #  Calibrate XY phase: calibrate P on 3C286 - refine the phase
     gaincal(vis = pol_ms, caltable = ktab_pol, selectdata = True,\
-        solint = "inf", field = xcal, combine = "",uvrange='',\
+        solint = "inf", field = xcals, combine = "",uvrange='',\
         refant = ref_ant, solnorm = False, gaintype = "K",\
         minsnr=3,parang = False, gaintable=[gtab_a2, btab2, ptab_df2])
 
     gaincal(vis = pol_ms, caltable = gtab_pol_p, selectdata = True,\
-        solint = 'inf', field = xcal, combine = "",scan='',\
+        solint = 'inf', field = xcals, combine = "",scan='',\
         refant = ref_ant, gaintype = "G", calmode = "p",uvrange='',refantmode='strict',\
         gaintable = [ktab_pol, gtab_a2,btab2,Ttab_sec,ptab_df2], parang = False)
 
     #selfcal on polarisation calibrator
-    tclean(vis=pol_ms,field=xcal,cell='0.5arcsec',imsize=512,niter=1000,imagename=path+'/CAL_IMAGES/'+obs+'_'+xcal+'-selfcal',weighting='briggs',robust=-0.2,datacolumn= 'corrected',deconvolver= 'mtmfs',\
+    tclean(vis=pol_ms,field=xcals,cell='0.5arcsec',imsize=512,niter=1000,imagename=path+'/CAL_IMAGES/'+obs+'_'+xcals+'-selfcal',weighting='briggs',robust=-0.2,datacolumn= 'corrected',deconvolver= 'mtmfs',\
         nterms=2,specmode='mfs',interactive=False)
-    gaincal(vis=pol_ms,field=xcal, calmode='p', solint='30s',caltable=gtab_pol_p+'-selfcal',refantmode='strict',\
+    gaincal(vis=pol_ms,field=xcals, calmode='p', solint='30s',caltable=gtab_pol_p+'-selfcal',refantmode='strict',\
         refant=ref_ant,gaintype='G',gaintable = [ktab_pol, gtab_a2,btab2, Ttab_sec,ptab_df2], parang = False)
     gtab_pol_p=gtab_pol_p+"-selfcal"
 
 
     gaincal(vis = pol_ms, caltable = Ttab_pol, selectdata = True,\
-        solint = "inf", field = xcal, combine = "",\
+        solint = "inf", field = xcals, combine = "",\
         refant = ref_ant, gaintype = "T", calmode = "ap",uvrange='', refantmode='strict',\
-        solnorm=True, gaintable = [ktab2, gtab_pol_p,gtab_a2,btab2,ptab_df2], append=False, parang=True)
+        solnorm=True, gaintable = [ktab2, gtab_pol_p,gtab_a2,btab2,ptab_df2], append=False, parang=False)
 
     #apply calibration up to  now, including phase refinement to xcal - crosshands should be real vaue dominated, imaginary will give idea of induced elliptcity. change in real axis due to parang
 
-    applycal(vis=pol_ms,field=xcal,gaintable=[ktab_pol, gtab_pol_p, gtab_a2, btab2, Ttab_sec, ptab_df2],parang=False, flagbackup=False)
-    os.system(f'/opt/shadems-env/bin/shadems {pol_ms} -x FREQ -y CORRECTED_DATA:phase -c CORR --corr XX,YY --field {xcal} --dir {path}/PLOTS --png {obs}_{xcal}_precalXf_XXYY_refinephase.png')
-    os.system(f'/opt/shadems-env/bin/shadems {pol_ms} -x CORRECTED_DATA:imag -y CORRECTED_DATA:real -c CORR --corr XY,YX --field {xcal} --dir {path}/PLOTS --png {obs}_{xcal}_precalXf_XYYX_real_im.png')
+    applycal(vis=pol_ms,field=xcals,gaintable=[ktab_pol, gtab_pol_p, gtab_a2, btab2, Ttab_sec, ptab_df2],parang=False, flagbackup=False)
+    os.system(f'/opt/shadems-env/bin/shadems {pol_ms} -x FREQ -y CORRECTED_DATA:phase -c CORR --corr XX,YY --field {xcals} --dir {path}/PLOTS --png {obs}_{xcals}_precalXf_XXYY_refinephase.png')
+    os.system(f'/opt/shadems-env/bin/shadems {pol_ms} -x CORRECTED_DATA:imag -y CORRECTED_DATA:real -c CORR --corr XY,YX --field {xcals} --dir {path}/PLOTS --png {obs}_{xcals}_precalXf_XYYX_real_im.png')
 
 
     # Cross-hand delay calibration - 
     gaincal(vis = pol_ms, caltable = kxtab, selectdata = True,\
-                solint = "inf", field = xcal, combine = "scan", scan='',\
+                solint = "inf", field = xcals, combine = "scan", scan='',\
                 refant = ref_ant, gaintype = "KCROSS",\
                 gaintable = [ktab_pol, gtab_pol_p, gtab_a2, btab2, Ttab_sec, ptab_df2],\
                 #smodel=[15.7433,0.8628247336,1.248991241,0],\
@@ -611,28 +756,28 @@ def crosscal(logger, obs_id, cal_ms, pol_ms, path, ref_ant='m000'):
 
     # Calibrate XY phase
     polcal(vis = pol_ms, caltable = ptab_xf, selectdata = True,scan='',combine='scan',\
-        solint = "1200s,20MHz", field = xcal, uvrange='',\
+        solint = "1200s,20MHz", field = xcals, uvrange='',\
         refant = ref_ant, poltype = "Xf",  gaintable = [ktab_pol, gtab_pol_p, gtab_a2,btab2, Ttab_sec, kxtab, ptab_df2],\
               #smodel= [15.7433,0.8628247336,1.248991241,0]\
               )
 
     
-    os.system(f'/opt/ragavi-env/bin/ragavi-gains --table {ptab_xf} --field 0 -o {path}/PLOTS/{obs}_Xfcal -p {path}/PLOTS/{obs}_Xfcal.png')
+    os.system(f'/opt/ragavi-env/bin/ragavi-gains --table {ptab_xf} --field {xcals} -o {path}/PLOTS/{obs}_Xfcal -p {path}/PLOTS/{obs}_Xfcal.png')
     
     logger.info("")
     logger.info('crosscal: Correcting for phase ambiguity')
     #exec(open('/localwork/angelina/meerkat_virgo/ViMS/ViMS/scripts/xyamb_corr.py').read())
     S=xyamb(logger, xytab=ptab_xf ,xyout=ptab_xfcorr)
 
-    os.system(f'/opt/ragavi-env/bin/ragavi-gains --table {ptab_xfcorr} --field 0 -o {path}/PLOTS/{obs}_Xfcal_ambcorr -p {path}/PLOTS/{obs}_Xfcal_ambcorr.png')
+    os.system(f'/opt/ragavi-env/bin/ragavi-gains --table {ptab_xfcorr} --field {xcals} -o {path}/PLOTS/{obs}_Xfcal_ambcorr -p {path}/PLOTS/{obs}_Xfcal_ambcorr.png')
 
     logger.info("")
     logger.info("crosscal: Finished calibration of the polarisation calibrator")
     # log.append_to_google_doc(' CROSSCAL', 'Finished calibration of the polcal', warnings="", plot_link="", doc_name="ViMS Pipeline Plots")
 
-    applycal(vis=pol_ms, field=xcal,gaintable=[ktab_pol, gtab_pol_p, gtab_a2, btab2, Ttab_sec, ptab_df2, kxtab, ptab_xfcorr],parang=True, flagbackup=False)
-    applycal(vis=calms, field=gcal,gaintable=[ktab_sec, gtab_sec_p, gtab_a2, btab2, Ttab_sec, ptab_df2, kxtab, ptab_xfcorr], parang=True, flagbackup=False)
-    applycal(vis=calms, field=fcal,gaintable=[ktab2, gtab_p2, gtab_a2, btab2, ptab_df2, kxtab, ptab_xfcorr], parang=True, flagbackup=False)
+    applycal(vis=pol_ms, field=xcals,gaintable=[ktab_pol, gtab_pol_p, gtab_a2, btab2, Ttab_sec, ptab_df2, kxtab, ptab_xfcorr],parang=True, flagbackup=False)
+    #applycal(vis=calms, field=gcal,gaintable=[ktab_sec, gtab_sec_p, gtab_a2, btab2, Ttab_sec, ptab_df2, kxtab, ptab_xfcorr], parang=True, flagbackup=False)
+    #applycal(vis=calms, field=fcal,gaintable=[ktab2, gtab_p2, gtab_a2, btab2, ptab_df2, kxtab, ptab_xfcorr], parang=True, flagbackup=False)
 
     final_flag = flagdata(vis=calms, mode='summary')
     logger.info("")
@@ -647,12 +792,12 @@ def crosscal(logger, obs_id, cal_ms, pol_ms, path, ref_ant='m000'):
 
     # Check: plot imaginary versis real and compare to previous plot
 
-    os.system(f'/opt/shadems-env/bin/shadems {pol_ms} -x CORRECTED_DATA:imag -y CORRECTED_DATA:real -c CORR --corr XY,YX --field {xcal} --dir {path}/PLOTS --png {obs}_{xcal}_aftercalXf_XYYX_real_im.png')
-    os.system(f'/opt/shadems-env/bin/shadems {pol_ms} -x FREQ -y CORRECTED_DATA:phase -c CORR --corr XY,YX --field {xcal} -dir {path}/PLOTS --png {obs}_{xcal}_aftercalXf_XYYX_phase.png')
+    os.system(f'/opt/shadems-env/bin/shadems {pol_ms} -x CORRECTED_DATA:imag -y CORRECTED_DATA:real -c CORR --corr XY,YX --field {xcals} --dir {path}/PLOTS --png {obs}_{xcals}_aftercalXf_XYYX_real_im.png')
+    os.system(f'/opt/shadems-env/bin/shadems {pol_ms} -x FREQ -y CORRECTED_DATA:phase -c CORR --corr XY,YX --field {xcals} --dir {path}/PLOTS --png {obs}_{xcals}_aftercalXf_XYYX_phase.png')
 
 #------------------------------------------------------
 
-def run(logger, obs_id, cal_ms, pol_ms, path):
+def run(logger, obs_id, cal_ms, pol_ms, path, band, cal_roles, ref_ant='m000'):
     # log.append_to_google_doc("######################################################", "", warnings="", plot_link="", doc_name="ViMS Pipeline Plots")
     # log.append_to_google_doc("###################### CROSSCAL ######################", "", warnings="", plot_link="", doc_name="ViMS Pipeline Plots")
     # log.append_to_google_doc("######################################################", "", warnings="", plot_link="", doc_name="ViMS Pipeline Plots")
@@ -661,7 +806,7 @@ def run(logger, obs_id, cal_ms, pol_ms, path):
     try:
         logger.info("\n\n\n\n\n")
         logger.info("CROSSCAL: starting crosscalibration...")
-        crosscal(logger, obs_id, cal_ms, pol_ms, path, ref_ant='m000')
+        crosscal(logger, obs_id, cal_ms, pol_ms, path, band, cal_roles, ref_ant)
         logger.info("Crosscal step completed successfully!")
         logger.info("")
         logger.info("")

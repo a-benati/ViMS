@@ -76,7 +76,7 @@ def run(logger, obs_id, targets, path):
             logger.info("PEEL M87: measuring flux...")
 
             ms_file = glob.glob(f'{path}/../{obs_id}_*{target}-avg.ms.copy')[0]
-            region = f"/beegfs/bba5268/meerkat_virgo/m87_offaxis.reg"
+            region = f"/lofar/bba5268/meerkat_virgo/m87_offaxis.reg"
             reg = Regions.read(region, format='ds9')[0]
             flux, beam_area_pix = flux_measurement(logger, obs_id, target, path, reg)
             logger.info(f"Flux of M87: {flux:.2f} Jy, Beam area in pixels: {beam_area_pix:.2f} pix")

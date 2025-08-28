@@ -125,8 +125,8 @@ def plot_flags(logger, obs_id, ms, path, when='before'):
         plot_pattern = os.path.join(plot_path, f"{obs_id}*_{when}_flags.png")
         plot_files = glob.glob(plot_pattern)
         plot_links = []
-        for plot in plot_files:
-            plot_links.append(log.upload_plot_to_drive(plot))
+        #for plot in plot_files:
+        #    plot_links.append(log.upload_plot_to_drive(plot))
         logger.info(stdout)
         if stderr:
             logger.error(f"Error in ShadeMS: {stderr}")
@@ -239,6 +239,41 @@ def flag_bad_channels(logger, ms):
     except Exception as e:
         logger.exception("Error while flagging bad channels")
 
+def flag_bad_antennas(logger, ms, ant):
+    """
+    Function to flag bad antennas .
+    
+    Parameters:
+        logger: logger instance of the pipeline
+        ms: measurement set file to be flagged
+    """
+    try:
+        logger.info("\n\n\n\n\n")
+        logger.info("FLAG: Flagging bad antenna...")
+        flagdata(vis=ms,\
+                    mode="manual",autocorr=False,inpfile="",reason="any",tbuff=0.0,\
+                    spw="",\
+                    field="",antenna= ant,uvrange="",timerange="",\
+                    correlation="",scan="",intent="",array="",observation="",feed="",clipminmax=[],\
+                    datacolumn="DATA",clipoutside=True,channelavg=False,chanbin=1,timeavg=False,timebin="0s",\
+                    clipzeros=False,quackinterval=0.0,quackmode="beg",quackincrement=False,tolerance=0.0,\
+                    addantenna="",lowerlimit=0.0,upperlimit=90.0,ntime="scan",combinescans=False,timecutoff=4.0,\
+                    freqcutoff=3.0,timefit="line",freqfit="poly",maxnpieces=7,flagdimension="freqtime",\
+                    usewindowstats="none",halfwin=1,extendflags=True,winsize=3,timedev="",freqdev="",timedevscale=5.0,\
+                    freqdevscale=5.0,spectralmax=1000000.0,spectralmin=0.0,antint_ref_antenna="",minchanfrac=0.6,\
+                    verbose=False,extendpols=True,growtime=50.0,growfreq=50.0,growaround=False,flagneartime=False,\
+                    flagnearfreq=False,minrel=0.0,maxrel=1.0,minabs=0,maxabs=-1,spwchan=False,spwcorr=False,\
+                    basecnt=False,fieldcnt=False,name="Summary",action="apply",display="",flagbackup=False,\
+                    savepars=False,cmdreason="",outfile="",overwrite=True,writeflags=True)
+        log.redirect_casa_log(logger)
+        logger.info("FLAG: Flagged bad antenna\n\n\n\n\n")
+        logger.info("")
+        logger.info("")
+        logger.info("")
+    except Exception as e:
+        logger.exception("Error while flagging bad antenna")
+
+
 def flag_rfi_mask(logger, ms): # NB NOT IMPLEMENTED!
     """
     Function to apply RFI mask on the measurement set.
@@ -334,7 +369,7 @@ def flag_tricolour_cal(logger, ms):
         logger.info("FLAG: Flagging with Tricolour...")
         logger.info("-------------------------------------------------------------------------------------")
         cmd = f"tricolour --config /angelina/meerkat_virgo/ViMS/ViMS/utils/mk_rfi_flagging_calibrator_fields_firstpass.yaml\
-                --flagging-strategy total_power --data-column DATA --field-names 0,1,2\
+                --flagging-strategy total_power --data-column DATA\
                 --window-backend numpy {ms}"
         stdout, stderr = utils.run_command(cmd, logger)
         logger.info(stdout)
@@ -364,7 +399,7 @@ def flag_summary(logger, ms, obs_id):
         summary = flagdata(vis=ms, mode='summary')
         log.redirect_casa_log(logger)
         log_flagsum(summary, logger)
-        log.update_cell_in_google_doc(obs_id, 'Flag Perc', get_flag_perc(summary))
+        #log.update_cell_in_google_doc(obs_id, 'Flag Perc', get_flag_perc(summary))
         logger.info("")
         logger.info("")
         logger.info("")
@@ -401,9 +436,14 @@ def run(logger, obs_id, ms, path, toflag='cal'):
     flag_autocorrelations(logger, ms)
     flag_shadowed_antenna(logger, ms)
     flag_bad_channels(logger, ms)
+    if obs_id == 'uhf1' or obs_id == 'uhf2':
+        ant = 'm021'
+    else:
+        ant = 'm041'
+    flag_bad_antennas(logger, ms, ant)
 
     if toflag == 'cal':
-        if obs_id =='obs01' or obs_id == 'obs02':
+        if obs_id =='obs01' or obs_id == 'obs02' or obs_id == 'uhf1':
             logger.info('Using stricter flagging for daytime observations')
             flag_tricolour_cal(logger, ms)
 
@@ -414,6 +454,9 @@ def run(logger, obs_id, ms, path, toflag='cal'):
     
     elif toflag == 'target':
         match = re.search(r'sdp_l0-([^.]+)\.ms$', ms)
+        if not match:
+            logger.error(f"Could not extract target from MS filename: {ms}")
+            return
         target = match.group(1)
         flag_tricolour(logger, ms, target)
 

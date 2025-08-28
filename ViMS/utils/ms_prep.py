@@ -42,40 +42,146 @@ def cal_lib(logger, obs_id, path):
 
 ###################### preparation of the ms files ##########################
 
-def copy_ms(logger, obs_id, path):
+def get_ms(logger, obs_id, delete_zipped=False):
+    import glob
+    import os
+    import tarfile
     """
-    copy the full ms file from the observatory server to /beegfs
-    and unzip it. Delete the original zipped file
+    checks whether the full ms file with the given Obs_id already exists.
+    If not, it will check for the zipped version on /lofar and unzip it. 
+    Deletes the original zipped file if needed.
+    Returns the path of the full ms file.
     """   
-    #TOADD: check if file already in beegfs also check if file alterantively in /lofar2 or lofar1. then no need to copy or unzip. return the path of the full_ms file for further handling
-    return('Not implemented yet')
+    search_folders = ['/lofar/bba5268/meerkat_virgo/raw_ms_files', '/lofar/bba5268/meerkat_virgo/raw_ms_files/uhf', '/lofar/p1uy068/meerkat-virgo/raw']
+    zipped_folder = '/lofar/bba5268/meerkat_virgo/raw_ms_files'
+
+    for folder in search_folders:
+        ms_file = glob.glob(f'{folder}/{obs_id}*.ms')
+        if ms_file:
+            logger.info(f'Found full ms files for obs_id {obs_id}: {ms_file}')
+            return ms_file[0]
+        else:
+            logger.info(f'No full ms files found for obs_id {obs_id} in {folder}.')
+    zipped_files = glob.glob(f'{zipped_folder}/{obs_id}*.ms.tar.gz')
+    if not zipped_files:
+        logger.error(f'No zipped ms files found for obs_id {obs_id} in {zipped_folder}')
+        raise FileNotFoundError(f'No zipped ms files found for obs_id {obs_id} in {zipped_folder}')
+
+    zipped_file = zipped_files[0]
+    logger.info(f'Found zipped ms file for obs_id {obs_id}: {zipped_file}')
+
+    with tarfile.open(zipped_file, 'r') as tar:
+        tar.extractall(path= zipped_folder)
+        extracted_files = tar.getnames()
+        logger.info(f'Extracted {zipped_file} to {zipped_folder}')
+
+    ms_file = None
+    for file in extracted_files:
+        if file.endswith('.ms'):
+            ms_file = os.path.join(zipped_folder, file)
+            break
+
+    if ms_file is None:
+        logger.error(f'No .ms file found after extraction for obs_id {obs_id}. Something went wrong.')
+        raise FileNotFoundError(f'No .ms file found after extraction for obs_id {obs_id}. Something went wrong.')
+
+    basename = os.path.basename(ms_file)
+    if basename.startswith(obs_id):
+        logger.info(f'extracted file name already starts with {obs_id}. Will not rename')
+    else: 
+        new_msfile = os.path.join(zipped_folder, f'{obs_id}_{basename}')
+        os.rename(ms_file, new_msfile)
+        ms_file = new_msfile
+        logger.info(f'Renamed extracted file to {ms_file}')
+    
+    if delete_zipped == True:
+        try:
+            os.remove(zipped_file)
+            logger.info(f'Deleted zipped file {zipped_file}')
+        except Exception as e:
+            logger.error(f'Error deleting zipped file {zipped_file}: {e}')
+    
+    return ms_file
+
+def get_cal_and_band(logger, ms_file):
+    from casatools import msmetadata, table
+    """
+    Determine all calibrator fields and the frequency band from the ms file.
+    Return calibrator list and band type (currently 'L' or 'UHF').
+    """
+
+    known_calibrators = {
+        'J1939-6342': ['flux', 'bandpass'],  # PKS 1934-638 (flux/bandpass cal)
+        'J1331+3030': ['polarization'],  # 3C286 (polarization cal)
+        'J1150-0023': ['gain'],  # gain cal
+        'J0408-6545': ['flux', 'bandpass'],  # UHF flux cal
+        #add as needed
+    }
+    msmd = msmetadata()
+    tb = table()
+
+    try:
+        msmd.open(ms_file)
+        tb.open(ms_file + '/SPECTRAL_WINDOW')
+
+        all_fields = msmd.fieldnames()
+        calibrators = [field for field in all_fields if field in known_calibrators]
+
+        cal_roles = {}
+        for cal in calibrators:
+            cal_roles[cal] = known_calibrators[cal]
+
+        ref_freq = tb.getcol('REF_FREQUENCY')
+        mean_freq = ref_freq.mean()/1e9 #in GHz
+
+        if mean_freq < 1.0:
+            band = 'UHF'
+        else:
+            band = 'L'
+        logger.info(f'detected band: {band} with mean frequency {mean_freq:.2f} GHz')
+        logger.info(f'found calibrators: {calibrators}')
+
+        return calibrators, band, cal_roles
+    
+    finally:
+        msmd.close()
+        tb.close()
 
 #----------------------------------------------------------------------------------------------------------------
 
-def split_cal(logger, obs_id, full_ms, path):
+def split_cal(logger, full_ms, path):
     from casatasks import mstransform
     """
     check if calibrator ms file already exists
     if not, split data of the calibrators of the full ms-file into a calibrator ms-file
     """
 
-    #full_ms = glob.glob(f'/beegfs/bba5268/meerkat_virgo/{obs_id}_*l0.ms')[0]
-    #full_ms = copy_ms(logger, obs_id, path)
     ms = os.path.basename(full_ms)
     base, ext = os.path.splitext(ms)
     split_ms = f'{path}/MS_FILES/{base}-cal{ext}'
+    calibrators, band, cal_roles = get_cal_and_band(logger, full_ms)
+    
+    if not calibrators:
+        logger.error(f'No calibrators found in {full_ms}. Cannot split into calibrator ms file.')
+        raise ValueError(f'No calibrators found in {full_ms}. Cannot split into calibrator ms file.')
 
     if os.path.isdir(split_ms):
         logger.info(f'Calibrator ms file {split_ms} already exists. Skipping splitting step.')
-        return split_ms
+        return split_ms, calibrators, band, cal_roles
     
     else:
+        if band == 'L':
+            freq_range = '0:0.9~1.65GHz'
+        elif band == 'UHF':
+            freq_range = '0:0.55~1.08GHz'
 
-        logger.info(f'Splitting the calibrators of file {full_ms}')
+        logger.info(f'Splitting the {band}-band calibrators of file {full_ms}')
         logger.info(f'Creating calibrators ms file {split_ms}')
 
+        cals = ','.join(calibrators)
+
         mstransform(vis=full_ms, outputvis=split_ms, createmms=False,\
-                separationaxis="auto",numsubms="auto", tileshape=[0],field="J1939-6342,J1150-0023,J1331+3030",spw="0:0.9~1.65GHz",scan="",antenna="",\
+                separationaxis="auto",numsubms="auto", tileshape=[0],field=cals,spw=freq_range,scan="",antenna="",\
                 correlation="",timerange="",intent="",array="",uvrange="",observation="",feed="",datacolumn="data",realmodelcol=False,keepflags=True,\
                 usewtspectrum=True,combinespws=False,chanaverage=False,chanbin=1,hanning=False, regridms=False,mode="channel",nchan=-1,start=0,width=1,\
                 nspw=1,interpolation="linear",phasecenter="",restfreq="",outframe="", veltype="radio",preaverage=False,timeaverage=False,timebin="",\
@@ -87,30 +193,35 @@ def split_cal(logger, obs_id, full_ms, path):
 
         logger.info(f'Size of the calibrator file:{cal_size} MB. Space left in target path {path}/MS_FILES/; {space_left[2]}/{space_left[0]} GB ({space_left[2]/space_left[0] *100} %)')
         
-        if os.path.exists(f"{path}/LOGS/feedswap.txt"):
-            os.remove("feedswap.txt")
+        if os.path.exists(f"{path}/LOGS/feedswap_cal.txt"):
+            os.remove("feedswap_cal.txt")
         else:
             logger.info("The feedswap file does not exist") 
-    
-        logger.info('Saved calibrator ms file succecsfully')
-        return split_ms
+
+        logger.info('Saved calibrator ms file successfully')
+        return split_ms, calibrators, band, cal_roles
 
 #----------------------------------------------------------------------------------------------------------------
 
-def average_cal(logger, cal_ms, path, nchan=512):
-    """
-    split the calibrators into flux/gain cal file and into polarisation cal file.
-    average both of these files to given channel number.
-    """
+def average_cal(logger, cal_ms, path, band, cal_roles, nchan=512, force=False):
     from casatasks import mstransform
     from casatools import msmetadata
     from utils import utils
+    """
+    split the calibrators into flux/gain cal file and into polarisation cal file.
+    average both of these files to given channel number.
+    Will automatically skip if the averaged files already exist except if force is set to True.
+    """
     
     basename = os.path.basename(cal_ms)
     base, ext = os.path.splitext(basename)
     logger.info(f'Found calibrator ms file: {cal_ms}')
     if not cal_ms:
         raise FileNotFoundError(f"No MS file found for {cal_ms}")
+    
+    pol_cals = [cal for cal, roles in cal_roles.items() if 'polarization' in roles]
+    flux_cals = [cal for cal, roles in cal_roles.items() if any(role in ['flux', 'bandpass', 'gain'] for role in roles)]
+    
     pol_ms_avg = f'{path}/MS_FILES/{base}-pol{ext}'
     flux_ms_avg = f'{path}/MS_FILES/{base}-flux{ext}'
 
@@ -119,13 +230,45 @@ def average_cal(logger, cal_ms, path, nchan=512):
     nchan_cal = msmd.nchan(0)
     msmd.close()
 
+    if band == 'L':
+        freq_range = '0:0.9~1.65GHz'
+    elif band == 'UHF':
+        freq_range = '0:0.55~1.08GHz'
+
+    if pol_cals:
+        pol_field_str = ','.join(pol_cals)
+    if flux_cals:
+        flux_field_str = ','.join(flux_cals)
+
     if os.path.isdir(pol_ms_avg):
         msmd = msmetadata()
         msmd.open(pol_ms_avg)
         nchan_in = msmd.nchan(0)
         msmd.close()
 
-        if nchan_in >= nchan -100 and nchan_in <= nchan +100:
+        if force==True:
+            logger.info(f'Force option set to True. Recreating polarisation calibrator ms file {pol_ms_avg}...')
+            chanbin = round(nchan_cal/nchan)
+
+            cmd = f"rm -r {pol_ms_avg} && rm -r {pol_ms_avg}.flagversions"
+
+
+            stdout, stderr = utils.run_command(cmd, logger)
+            logger.info(stdout)
+            if stderr:
+                logger.error(f"Error in deleting ms file: {stderr}")
+            
+            mstransform(vis=cal_ms, outputvis=pol_ms_avg, createmms=False,\
+                separationaxis="auto",numsubms="auto", tileshape=[0],field=pol_field_str,spw=freq_range,scan="",antenna="",\
+                correlation="",timerange="",intent="",array="",uvrange="",observation="",feed="",datacolumn="data",realmodelcol=False,keepflags=True,\
+                usewtspectrum=True,combinespws=False,chanaverage=True,chanbin=chanbin,hanning=False, regridms=False,mode="channel",nchan=-1,start=0,width=1,\
+                nspw=1,interpolation="linear",phasecenter="",restfreq="",outframe="", veltype="radio",preaverage=False,timeaverage=False,timebin="",\
+                timespan="", maxuvwdistance=0.0,docallib=False,callib="",douvcontsub=False,fitspw="", fitorder=0,want_cont=False,denoising_lib=True,\
+                nthreads=1,niter=1, disableparallel=False,ddistart=-1,taql="",monolithic_processing=False,reindex=True)
+            
+            logger.info(f'Polarisation calibrator ms file {pol_ms_avg} created with {nchan} channels')
+
+        elif nchan_in >= nchan -50 and nchan_in <= nchan +50 and force==False:
             logger.info(f'Polarisation calibrator ms file {pol_ms_avg} already exists with specified channel number. Skipping averaging step.')
         
         else:
@@ -138,10 +281,10 @@ def average_cal(logger, cal_ms, path, nchan=512):
             stdout, stderr = utils.run_command(cmd, logger)
             logger.info(stdout)
             if stderr:
-                logger.error(f"Error in deletin ms file: {stderr}")
+                logger.error(f"Error in deleting ms file: {stderr}")
             
             mstransform(vis=cal_ms, outputvis=pol_ms_avg, createmms=False,\
-                separationaxis="auto",numsubms="auto", tileshape=[0],field="J1331+3030",spw="0:0.9~1.65GHz",scan="",antenna="",\
+                separationaxis="auto",numsubms="auto", tileshape=[0],field=pol_field_str,spw=freq_range,scan="",antenna="",\
                 correlation="",timerange="",intent="",array="",uvrange="",observation="",feed="",datacolumn="data",realmodelcol=False,keepflags=True,\
                 usewtspectrum=True,combinespws=False,chanaverage=True,chanbin=chanbin,hanning=False, regridms=False,mode="channel",nchan=-1,start=0,width=1,\
                 nspw=1,interpolation="linear",phasecenter="",restfreq="",outframe="", veltype="radio",preaverage=False,timeaverage=False,timebin="",\
@@ -155,7 +298,7 @@ def average_cal(logger, cal_ms, path, nchan=512):
         chanbin = round(nchan_cal/nchan)
         
         mstransform(vis=cal_ms, outputvis=pol_ms_avg, createmms=False,\
-            separationaxis="auto",numsubms="auto", tileshape=[0],field="J1331+3030",spw="0:0.9~1.65GHz",scan="",antenna="",\
+            separationaxis="auto",numsubms="auto", tileshape=[0],field=pol_field_str,spw=freq_range,scan="",antenna="",\
             correlation="",timerange="",intent="",array="",uvrange="",observation="",feed="",datacolumn="data",realmodelcol=False,keepflags=True,\
             usewtspectrum=True,combinespws=False,chanaverage=True,chanbin=chanbin,hanning=False, regridms=False,mode="channel",nchan=-1,start=0,width=1,\
             nspw=1,interpolation="linear",phasecenter="",restfreq="",outframe="", veltype="radio",preaverage=False,timeaverage=False,timebin="",\
@@ -170,7 +313,28 @@ def average_cal(logger, cal_ms, path, nchan=512):
         nchan_in = msmd.nchan(0)
         msmd.close()
 
-        if nchan_in >= nchan -100 and nchan_in <= nchan +100:
+        if force==True:
+            logger.info(f'Force option set to True. Recreating flux/gain calibrator ms file {flux_ms_avg}...')
+            chanbin = round(nchan_cal/nchan)
+
+            cmd = f"rm -r {flux_ms_avg} && rm -r {flux_ms_avg}.flagversions"
+
+            stdout, stderr = utils.run_command(cmd, logger)
+            logger.info(stdout)
+            if stderr:
+                logger.error(f"Error in deleting ms file: {stderr}")
+            
+            mstransform(vis=cal_ms, outputvis=flux_ms_avg, createmms=False,\
+                separationaxis="auto",numsubms="auto", tileshape=[0],field=flux_field_str,spw=freq_range,scan="",antenna="",\
+                correlation="",timerange="",intent="",array="",uvrange="",observation="",feed="",datacolumn="data",realmodelcol=False,keepflags=True,\
+                usewtspectrum=True,combinespws=False,chanaverage=True,chanbin=chanbin,hanning=False, regridms=False,mode="channel",nchan=-1,start=0,width=1,\
+                nspw=1,interpolation="linear",phasecenter="",restfreq="",outframe="", veltype="radio",preaverage=False,timeaverage=False,timebin="",\
+                timespan="", maxuvwdistance=0.0,docallib=False,callib="",douvcontsub=False,fitspw="", fitorder=0,want_cont=False,denoising_lib=True,\
+                nthreads=1,niter=1, disableparallel=False,ddistart=-1,taql="",monolithic_processing=False,reindex=True)
+            
+            logger.info(f'Flux and gain calibrator ms file {flux_ms_avg} created with {nchan} channels')
+
+        elif nchan_in >= nchan -50 and nchan_in <= nchan +50 and force==False:
             logger.info(f'flux/gain calibrator ms file {flux_ms_avg} already exists with specified channel number. Skipping averaging step.')
         
         else:
@@ -182,10 +346,10 @@ def average_cal(logger, cal_ms, path, nchan=512):
             stdout, stderr = utils.run_command(cmd, logger)
             logger.info(stdout)
             if stderr:
-                logger.error(f"Error in deletin ms file: {stderr}")
+                logger.error(f"Error in deleting ms file: {stderr}")
             
             mstransform(vis=cal_ms, outputvis=flux_ms_avg, createmms=False,\
-                separationaxis="auto",numsubms="auto", tileshape=[0],field="J1939-6342,J1150-0023",spw="0:0.9~1.65GHz",scan="",antenna="",\
+                separationaxis="auto",numsubms="auto", tileshape=[0],field=flux_field_str,spw=freq_range,scan="",antenna="",\
                 correlation="",timerange="",intent="",array="",uvrange="",observation="",feed="",datacolumn="data",realmodelcol=False,keepflags=True,\
                 usewtspectrum=True,combinespws=False,chanaverage=True,chanbin=chanbin,hanning=False, regridms=False,mode="channel",nchan=-1,start=0,width=1,\
                 nspw=1,interpolation="linear",phasecenter="",restfreq="",outframe="", veltype="radio",preaverage=False,timeaverage=False,timebin="",\
@@ -199,7 +363,7 @@ def average_cal(logger, cal_ms, path, nchan=512):
         chanbin = round(nchan_cal/nchan)
         
         mstransform(vis=cal_ms, outputvis=flux_ms_avg, createmms=False,\
-            separationaxis="auto",numsubms="auto", tileshape=[0],field="J1939-6342,J1150-0023",spw="0:0.9~1.65GHz",scan="",antenna="",\
+            separationaxis="auto",numsubms="auto", tileshape=[0],field=flux_field_str,spw=freq_range,scan="",antenna="",\
             correlation="",timerange="",intent="",array="",uvrange="",observation="",feed="",datacolumn="data",realmodelcol=False,keepflags=True,\
             usewtspectrum=True,combinespws=False,chanaverage=True,chanbin=chanbin,hanning=False, regridms=False,mode="channel",nchan=-1,start=0,width=1,\
             nspw=1,interpolation="linear",phasecenter="",restfreq="",outframe="", veltype="radio",preaverage=False,timeaverage=False,timebin="",\
@@ -222,29 +386,20 @@ def split_targets(logger, obs_id, full_ms, path):
     does NOT apply any calibration tables or averaging
     """
 
-    #path_ms = f'/beegfs/bba5268/meerkat_virgo/'
-    #full_ms = glob.glob(f'{path_ms}{obs_id}_*l0.ms')[0]
-    #full_ms = copy_ms(logger, obs_id, path)
+
     if full_ms:
         logger.info(f'Found full ms file: {full_ms}')
+        calibrators, band, cal_roles = get_cal_and_band(logger, full_ms)
     
     msmd = msmetadata()
     msmd.open(full_ms)
     fields = msmd.fieldnames()
     msmd.close()
-    targets = []
+    
+    targets = [field for field in fields if field not in calibrators]
 
     logger.info(f'Splitting the target fields of file {full_ms}')
 
-    for field in fields:
-        if field == 'J1939-6342':
-            pass
-        elif field == 'J1331+3030':
-            pass
-        elif field == 'J1150-0023':
-            pass
-        else:
-            targets.append(field)
 
     filename = os.path.basename(full_ms)
     base, ext = os.path.splitext(filename)
@@ -377,7 +532,7 @@ def average_targets(logger, obs_id, targets, path, nchan=512, chanbin=None, forc
             nchan_in = msmd.nchan(0)
             msmd.close()
 
-            if nchan_in >= nchan -100 and nchan_in <= nchan +100:
+            if nchan_in >= nchan -50 and nchan_in <= nchan +50:
                 logger.info(f'Target ms file {split_ms_avg} averaged to {nchan} channels already exists. Skipping averaging step.')
                 continue
             else:
