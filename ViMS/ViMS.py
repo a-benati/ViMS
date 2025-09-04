@@ -102,9 +102,9 @@ for obs_id in obs_ids:
     ######################## CROSSCAL ########################
     ##########################################################
     if current_step <= 2:
-        crosscal.run(logger, obs_id, flux_ms, pol_ms, output_dir, band, cal_roles, ref_ant='m003')
+        crosscal.run(logger, obs_id, flux_ms, pol_ms, output_dir, band, cal_roles, ref_ant='m000')
 
-    '''##########################################################
+    ##########################################################
     ####################### POLCAL IM ########################
     ##########################################################
     if current_step <= 3:
@@ -167,6 +167,7 @@ for obs_id in obs_ids:
     ##################### POLIM TARGET #######################
     ##########################################################
 
+    targets = ['virgo062']
     if current_step <= 8:
         im_target.run(logger, obs_id, targets, output_dir)
 
@@ -177,19 +178,21 @@ for obs_id in obs_ids:
 
     try:
         logger.info(f'Copying results for {obs_id} from working directory to /lofar...')
-        if os.path.exists(f'/lofar/bba5268/meerkat_virgo/{obs_id}'):
-            os.system(f'rm -rf /lofar/bba5268/meerkat_virgo/{obs_id}')
-        os.system(f'rsync -avPh --append-verify {output_dir} /lofar/bba5268/meerkat_virgo/{obs_id}')
+        #if os.path.exists(f'/lofar/bba5268/meerkat_virgo/{obs_id}'):
+            #os.system(f'rm -rf /lofar/bba5268/meerkat_virgo/{obs_id}')
+        #os.system(f'rsync -avPh --append-verify {output_dir} /lofar/bba5268/meerkat_virgo/{obs_id}')
 
-        if args.delete_workdir:
-            logger.info(f'Deleting working directory for {obs_id}...')
-            os.system(f'rm -rf {output_dir}')
+        #if args.delete_workdir:
+            #logger.info(f'Deleting working directory for {obs_id}...')
+            #os.system(f'rm -rf {output_dir}')
     except Exception as e:
-        logger.exception(f"Error while copying/deleting data for observation {obs_id}")'''
+        logger.exception(f"Error while copying/deleting data for observation {obs_id}")
 
 if args.do_rmsynth:
     obs_ids = ['obs25','obs26','obs28']
     targets = ['virgo083','virgo064','virgo084','virgo062']
+
+    #SINGLE MODE CURRENTLY DOESN'T WORK, NEEDS PB CORR FIX
     rmsynth_target.run(logger, obs_ids, targets, full_ms, output_dir, mode='mosaic')
 
 ####

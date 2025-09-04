@@ -3,7 +3,6 @@
 import numpy as np
 from casatasks import *
 from casatools import table
-#from scripts_fra import applycal
 from utils import utils
 
 
@@ -154,6 +153,7 @@ def crosscal(logger, obs_id, cal_ms, pol_ms, path, band, cal_roles, ref_ant):
     ktab_sec = path+'/CAL_TABLES/'+obs+'_calib.kcal.sec'
     gtab_sec_p = path+'/CAL_TABLES/'+obs+'_calib.gcal_p.sec'
     Ttab_sec = path+'/CAL_TABLES/'+obs+'_calib.T.sec'
+    fringetab_sec = path+'/CAL_TABLES/'+obs+'_calib.fringe.sec'
     ktab_pol = path+'/CAL_TABLES/'+obs+'_calib.kcal.pol'
     gtab_pol_p = path+'/CAL_TABLES/'+obs+'_calib.gcal_p.pol'
     Ttab_pol = path+'/CAL_TABLES/'+obs+'_calib.T.pol'
@@ -406,7 +406,7 @@ def crosscal(logger, obs_id, cal_ms, pol_ms, path, band, cal_roles, ref_ant):
         
         if band == 'UHF':
             #add additional phase calibration to account for Ionospheric errors at low frequencies
-            fringefit(vis= calms, caltable=fringetab, field=bpcal[i], solint='inf', spw='', timerange='', scan='',\
+            fringefit(vis= calms, caltable=fringetab, field=bpcal[i], solint='6min', spw='', timerange='', scan='',\
                       refant=ref_ant, gaintable=[ktab, gtab_p, gtab_a], gainfield=['', bpcal[i], bpcal[i]],\
                       minsnr=50, append=append, parang=False, uvrange='')
 
@@ -437,8 +437,8 @@ def crosscal(logger, obs_id, cal_ms, pol_ms, path, band, cal_roles, ref_ant):
     os.system(f'/opt/ragavi-env/bin/ragavi-gains --table {btab} --field {bpcals} -o {path}/PLOTS/{obs}_Bpcal -p {path}/PLOTS/{obs}_Bpcal.png')
 
     #add flagging of Data and redoing crosscal on primary again
-    flagdata(vis=calms, mode="rflag", field=bpcals, datacolumn="corrected", quackinterval=0.0, timecutoff=4.0, freqcutoff=3.0, extendpols=False, flagbackup=False, outfile="",overwrite=True, extendflags=False, correlation='XX,YY')
-    flagdata(vis=calms, mode='extend', field=bpcals, datacolumn='corrected', growtime=80, growfreq=80, flagbackup=False, correlation='XX,YY')
+    flagdata(vis=calms, mode="rflag", field=bpcals, datacolumn="residual", quackinterval=0.0, timecutoff=4.0, freqcutoff=3.0, extendpols=False, flagbackup=False, outfile="",overwrite=True, extendflags=False)
+    flagdata(vis=calms, mode='extend', field=bpcals, datacolumn='residual', growtime=80, growfreq=80, flagbackup=False)
 
     if any(isinstance(entry, dict) and entry.get('name') == obs+'_flag_crosscal' for entry in flag_versions.values()):
         flagmanager(vis=calms, mode='delete', versionname=obs+'_flag_crosscal', merge='replace')
@@ -510,7 +510,7 @@ def crosscal(logger, obs_id, cal_ms, pol_ms, path, band, cal_roles, ref_ant):
                 refant = ref_ant, gaintype = "T", calmode = "a",uvrange='',\
                 gaintable = [ktab2, gtab_p2, fringetab, btab], gainfield = ['',bpcal[i],bpcal[i], bpcal[i]],parang = False, append=append)
 
-            fringefit(vis= calms, caltable=fringetab2, field=bpcal[i], solint='inf', spw='', timerange='', scan='',\
+            fringefit(vis= calms, caltable=fringetab2, field=bpcal[i], solint='6min', spw='', timerange='', scan='',\
                       refant=ref_ant, gaintable=[ktab2, gtab_p2, gtab_a2, btab], gainfield=['', bpcal[i], bpcal[i], bpcal[i]],\
                       minsnr=50, append=append, parang=False, uvrange='')
         
@@ -617,7 +617,7 @@ def crosscal(logger, obs_id, cal_ms, pol_ms, path, band, cal_roles, ref_ant):
     os.system(f'/opt/ragavi-env/bin/ragavi-gains -x channel --table {ptab_df2} --field {leakcal} -o {path}/PLOTS/{obs}_Dfcal_flagged2 -p {path}/PLOTS/{obs}_Dfcal_flagged2.png')
      
     if band == 'UHF':
-        applycal(vis=calms,field=leakcal,gaintable=[ktab2,gtab_p2,gtab_a2,fringetab2,btab2,ptab_df2],parang=False, flagbackup=False)
+        applycal(vis=calms,field=gcals,gaintable=[ktab2,gtab_p2,gtab_a2,fringetab2,btab2,ptab_df2],parang=False, flagbackup=False)
     else:
         applycal(vis=calms,field=gcals,gaintable=[ktab2,gtab_p2,gtab_a2,btab2,ptab_df2],parang=False, flagbackup=False)
 
@@ -638,10 +638,10 @@ def crosscal(logger, obs_id, cal_ms, pol_ms, path, band, cal_roles, ref_ant):
     logger.info('crosscal: Starting crosscalibration of the secondary calibrator')
 
     #  Calibrate Secondary -p  and T - amplitude normalized to 1
-    gaincal(vis = calms, caltable = ktab_sec, selectdata = True,\
+    gaincal(vis = calms, caltable = ktab_sec,\
         solint = "30min", field = gcals, combine = "scan",uvrange='',\
         refant = ref_ant, solnorm = False, gaintype = "K",\
-        minsnr=3,parang = False, gaintable=[gtab_a2, btab2, ptab_df2])
+        parang = False, gaintable=[gtab_a2, btab2, ptab_df2])
 
     gaincal(vis = calms, caltable = gtab_sec_p, selectdata = True,\
         solint = "inf", field = gcals, combine = "",\
@@ -653,6 +653,16 @@ def crosscal(logger, obs_id, cal_ms, pol_ms, path, band, cal_roles, ref_ant):
     gaincal(vis=calms,field=gcals, calmode='p', solint='30s',caltable=gtab_sec_p+'-selfcal',refantmode='strict',\
         refant=ref_ant,gaintype='G',gaintable = [ktab_sec, gtab_a2,btab2,ptab_df2], parang = False)
     gtab_sec_p=gtab_sec_p+"-selfcal"
+
+    if band == 'UHF':
+        fringefit(vis= calms, caltable=fringetab_sec, field=gcals, solint='6min', spw='', timerange='', scan='',\
+                  refant=ref_ant, gaintable=[ktab_sec, gtab_sec_p, gtab_a2, btab2, ptab_df2],\
+                  minsnr=50, append=False, parang=False, uvrange='')
+
+    if band == 'UHF':
+        applycal(vis=calms,field=gcals,gaintable=[ktab_sec,gtab_sec_p,gtab_a2,fringetab_sec,btab2,ptab_df2],parang=False, flagbackup=False)
+    else:
+        applycal(vis=calms,field=gcals,gaintable=[ktab_sec,gtab_sec_p,gtab_a2,btab2,ptab_df2],parang=False, flagbackup=False)
 
     flagdata(vis=calms, mode="rflag", field=gcals, datacolumn="residual", quackinterval=0.0, timecutoff=4.0, freqcutoff=3.0, extendpols=False, flagbackup=False, outfile="",overwrite=True, extendflags=False)
     flagdata(vis=calms, mode='extend', field=gcals, datacolumn='residual', growtime=80, growfreq=80, flagbackup=False, growaround=True, flagnearfreq=True)
@@ -675,15 +685,29 @@ def crosscal(logger, obs_id, cal_ms, pol_ms, path, band, cal_roles, ref_ant):
         solint = "30s", field = gcals, combine = "",\
         refant = ref_ant, gaintype = "G", calmode = "p",uvrange='',refantmode='strict',\
         gaintable = [ktab_sec, gtab_a2,btab2,ptab_df2], parang = False)
-
-    gaincal(vis = calms, caltable = Ttab_sec, selectdata = True,\
+    
+    if band == 'UHF':
+        fringefit(vis= calms, caltable=fringetab_sec, field=gcals, solint='3min', spw='', timerange='', scan='',\
+                  refant=ref_ant, gaintable=[ktab_sec, gtab_sec_p, gtab_a2, btab2, ptab_df2],\
+                  minsnr=25, append=False, parang=False, uvrange='')
+        
+        gaincal(vis = calms, caltable = Ttab_sec, selectdata = True,\
+        solint = "inf", field = gcals, combine = "",\
+        refant = ref_ant, gaintype = "T", calmode = "ap",uvrange='',refantmode='strict',\
+        solnorm=True, gaintable = [ktab_sec, gtab_sec_p,gtab_a2, fringetab_sec,btab2,ptab_df2], append=False, parang=False)
+    
+    else:
+        gaincal(vis = calms, caltable = Ttab_sec, selectdata = True,\
         solint = "inf", field = gcals, combine = "",\
         refant = ref_ant, gaintype = "T", calmode = "ap",uvrange='',refantmode='strict',\
         solnorm=True, gaintable = [ktab_sec, gtab_sec_p,gtab_a2,btab2,ptab_df2], append=False, parang=False)
 
 
     # Check calibration of secondary
-    applycal(vis=calms, field=gcals, gaintable=[ktab_sec, gtab_sec_p,gtab_a2,btab2,Ttab_sec,ptab_df2], parang=False, flagbackup=False)
+    if band == 'UHF':
+        applycal(vis=calms, field=gcals, gaintable=[ktab_sec, gtab_sec_p,gtab_a2,fringetab_sec,btab2,Ttab_sec,ptab_df2], parang=False, flagbackup=False)
+    else:
+        applycal(vis=calms, field=gcals, gaintable=[ktab_sec, gtab_sec_p,gtab_a2,btab2,Ttab_sec,ptab_df2], parang=False, flagbackup=False)
     #os.system(f'/opt/ragavi-env/bin/ragavi-vis --ms {calms} -x frequency -y amplitude -dc CORRECTED tbin 12000 -ca antenna1 --corr XY,YX --field {gcal} -o {path}/PLOTS/{obs}_{gcal}-Df-CORRECTED.png')
     os.system(f'/opt/shadems-env/bin/shadems {calms} -x uv -y CORRECTED_DATA:amp -c ANTENNA1 --corr XX,YY --field {gcals} --dir {path}/PLOTS --png {obs}_{gcals}_amp_XXYY.png')
     os.system(f'/opt/shadems-env/bin/shadems {calms} -x uv -y CORRECTED_DATA:phase -c ANTENNA1 --corr XX,YY --field {gcals} --dir {path}/PLOTS --png {obs}_{gcals}_phase_XXYY.png')

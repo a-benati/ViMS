@@ -58,12 +58,15 @@ def pad_mosaic(logger, obs_id_str, path):
             data = hdu[0].data
             header = hdu[0].header
 
+            y_offset = (max_shape[0] - data.shape[0]) // 2
+            x_offset = (max_shape[1] - data.shape[1]) // 2
+
             padded = np.full(max_shape, np.nan)
-            padded[:data.shape[0], :data.shape[1]] = data
+            padded[y_offset:y_offset + data.shape[0], x_offset:x_offset + data.shape[1]] = data
 
             if 'CRPIX1' in header and 'CRPIX2' in header:
-                header['CRPIX1'] += (max_shape[1] - data.shape[1]) // 2
-                header['CRPIX2'] += (max_shape[0] - data.shape[0]) // 2
+                header['CRPIX1'] += x_offset
+                header['CRPIX2'] += y_offset
             header['NAXIS1'] = max_shape[1]
             header['NAXIS2'] = max_shape[0]
 
@@ -89,7 +92,7 @@ def make_mosaic(logger, obs_ids, targets, full_ms):
         logger.info(f'make_mosaic: Using specified targets {targets}')
 
     
-    def gather_images(targets, stokes, num):
+    def gather_images(targets, stokes, num, type='image'):
         """
         Gather all images for the specified Stokes parameter and image number.
         Done for all targets in the mosaic_targets list.
@@ -101,7 +104,10 @@ def make_mosaic(logger, obs_ids, targets, full_ms):
             num_str = str(num).zfill(4)
         for obs_id in obs_ids:
             for target in targets:
-                pattern = f'{obs_id}/TARGET_IMAGES/{obs_id}_{target}_pol-{num_str}-{stokes}-image-pb-cut.fits'
+                if type == 'image':
+                    pattern = f'{obs_id}/TARGET_IMAGES/{obs_id}_{target}_pol-{num_str}-{stokes}-image-cut.fits'
+                elif type == 'beam':
+                    pattern = f'{obs_id}/TARGET_IMAGES/{obs_id}_{target}_pol-{num_str}-{stokes}-image_beam-cut.fits'
                 images.extend(glob.glob(pattern))
         return images
     
@@ -110,7 +116,10 @@ def make_mosaic(logger, obs_ids, targets, full_ms):
         num_str = str(num).zfill(4)
         for stokes in ['Q', 'U', 'I']:
             image_list = gather_images(targets, stokes, num)
+            beam_list = gather_images(targets, stokes, num, type='beam')
+            logger.info(f'beam list: {beam_list}')
             logger.info(f'make_mosaic: Found {len(image_list)} images for Stokes {stokes} and image number {num_str}')
+            logger.info(f'make_mosaic: Found {len(beam_list)} beams for Stokes {stokes} and image number {num_str}')
             skip_mosaic = False
             for im in image_list:
                 try:
@@ -123,13 +132,15 @@ def make_mosaic(logger, obs_ids, targets, full_ms):
                     logger.error(f"Could not read {im}: {e}")
             if len(image_list) > 1 and skip_mosaic == False:
                 images_str = " ".join(image_list)
+                beams_str = " ".join(beam_list)
                 output_mosaic = f'mosaics/mosaic_{obs_id_str}_{num_str}-{stokes}-image-pb.fits'
-                cmd = f'python3.10 /angelina/meerkat_virgo/scripts_fra/mosaic.py --images {images_str} --output {output_mosaic}'
+                cmd = f'python3.10 /angelina/meerkat_virgo/scripts_fra/mosaic.py --images {images_str} --output {output_mosaic} --find_noise --beamcorr --beams {beams_str}'
                 stdout, stderr = utils.run_command(cmd, logger)
                 logger.info(stdout)
                 if stderr:
                     logger.error(f"Error in mosaic.py: {stderr}")
     image_list = gather_images(targets, 'I', 'MFS')
+    beam_list = gather_images(targets, 'I', 'MFS', type='beam')
     logger.info(f'Make mosaic out of the MFS Stokes I images. Found {len(image_list)} images')
     skip_mosaic = False
     for im in image_list:
@@ -143,8 +154,9 @@ def make_mosaic(logger, obs_ids, targets, full_ms):
             logger.error(f"Could not read {im}: {e}")
     if len(image_list) > 1 and skip_mosaic == False:
         images_str = " ".join(image_list)
+        beams_str = " ".join(beam_list)
         output_mosaic = f'mosaics/mosaic_{obs_id_str}_MFS-I-image-pb.fits'
-        cmd = f'python3.10 /angelina/meerkat_virgo/scripts_fra/mosaic.py --images {images_str} --output {output_mosaic}'
+        cmd = f'python3.10 /angelina/meerkat_virgo/scripts_fra/mosaic.py --images {images_str} --output {output_mosaic} --find_noise --beamcorr --beams {beams_str}'
         stdout, stderr = utils.run_command(cmd, logger)
         logger.info(stdout)
         if stderr:
@@ -713,6 +725,7 @@ def run(logger, obs_ids, targets, full_ms, path, mode='single'):
             logger.info("")
         except Exception as e:
             logger.exception("Error while creating mosaic of images")
+        
 
         try:
             logger.info("\n\n\n\n\n")
@@ -736,7 +749,7 @@ def run(logger, obs_ids, targets, full_ms, path, mode='single'):
             try:
                 logger.info("\n\n\n\n\n")
                 logger.info("IMAGE POL TARGET: creating image cubes for single targets...")
-                #make_cubes(logger, obs_id, target, path, mosaic_obs_id_str, mode)
+                make_cubes(logger, obs_id, target, path, mosaic_obs_id_str, mode)
                 logger.info('IMAGE POL TARGET: finished creating image cubes')
                 logger.info("")
                 logger.info("")
@@ -887,11 +900,11 @@ def run(logger, obs_ids, targets, full_ms, path, mode='single'):
             out_name = f'mosaic_{mosaic_obs_id_str}-'
             for i in ['Q', 'U']:
                 cmd = f"export PYTHONPATH=/opt/RM-Tools:$PYTHONPATH && python3.10 /opt/RM-Tools/RMtools_3D/create_chunks.py {cube_name}{i}_cube.fits 3000000"
-            logger.info(f"IMAGE POL TARGET: Executing command: {cmd}")
-            stdout, stderr = utils.run_command(cmd, logger)
-            logger.info(stdout)
-            if stderr:
-                logger.error(f"Error in creating chunks: {stderr}")
+                logger.info(f"IMAGE POL TARGET: Executing command: {cmd}")
+                stdout, stderr = utils.run_command(cmd, logger)
+                logger.info(stdout)
+                if stderr:
+                    logger.error(f"Error in creating chunks: {stderr}")
             cmd = f"export PYTHONPATH=/opt/RM-Tools:$PYTHONPATH && python3.10 /opt/RM-Tools/RMtools_3D/create_chunks.py {cube_name}I_masked.fits 3000000"
             logger.info(f"IMAGE POL TARGET: Executing command: {cmd}")
             stdout, stderr = utils.run_command(cmd, logger)
@@ -915,18 +928,22 @@ def run(logger, obs_ids, targets, full_ms, path, mode='single'):
                 suffixes = ['FDF_clean_real.fits', 'FDF_clean_im.fits', 'FDF_clean_tot.fits', 'FDF_CC_real.fits', 'FDF_CC_im.fits', 'FDF_CC_tot.fits']
 
                 for suffix in suffixes:
-                    old_name = f'{out_name}{suffix}'
+                    old_name = f'mosaics/stokes_cubes/{out_name}{suffix}'
                     chunk_suffix = f'.C{i}.fits'
-                    new_name = f'{out_name}{suffix.replace(".fits", chunk_suffix)}'
+                    new_name = f'mosaics/stokes_cubes/{out_name}{suffix.replace(".fits", chunk_suffix)}'
+                    if os.path.exists(new_name):
+                        os.remove(new_name)
                     if os.path.exists(old_name):
                         os.rename(old_name, new_name)
                         logger.info(f"Renamed {old_name} to {new_name}")
-                    cmd = f"export PYTHONPATH=/opt/RM-Tools:$PYTHONPATH && python3.10 /opt/RM-Tools/RMtools_3D/assemble_chunks.py mosaics/{new_name}"
-                    logger.info(f"IMAGE POL TARGET: Executing command: {cmd}")
-                    stdout, stderr = utils.run_command(cmd, logger)
-                    logger.info(stdout)
-                    if stderr:
-                        logger.error(f"Error in assembling chunks: {stderr}")
+            clean_cubes = glob.glob(f'mosaics/stokes_cubes/{out_name}FDF_clean*.C0.fits')
+            for j in clean_cubes:
+                cmd = f"export PYTHONPATH=/opt/RM-Tools:$PYTHONPATH && python3.10 /opt/RM-Tools/RMtools_3D/assemble_chunks.py {j}"
+                logger.info(f"IMAGE POL TARGET: Executing command: {cmd}")
+                stdout, stderr = utils.run_command(cmd, logger)
+                logger.info(stdout)
+                if stderr:
+                    logger.error(f"Error in assembling chunks: {stderr}")
             logger.info("IMAGE POL TARGET: finished rmsynth3d")
             logger.info("")
             logger.info("")

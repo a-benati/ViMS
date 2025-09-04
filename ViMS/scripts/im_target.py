@@ -6,6 +6,9 @@ def run(logger, obs_id, targets, path):
     from utils import utils
     import numpy as np
     from astropy.io import fits
+    from astropy.wcs import WCS
+    from astropy.nddata import Cutout2D
+    import os
     """
     Image the target fields via WSClean and determine the RM synthesis parameters
     of it with RMsynth3d for the given Observation ID.
@@ -59,10 +62,10 @@ def run(logger, obs_id, targets, path):
 
             cmd = f"wsclean -name {im_name} -size {image_size} {image_size} -scale 2.asec -mgain 0.75 -niter 50000 -fits-mask {target_mask} \
                 -field 0 -pol iquv -weight briggs -0.5 -j 16 -abs-mem 100.0 -channels-out 100 -join-channels -gridder wgridder -no-update-model-required \
-                -reorder -parallel-reordering 4 -squared-channel-joining -join-polarizations -fit-spectral-pol 4 -circular-beam -beam-size 13asec -apply-primary-beam \
-                -auto-mask 5 -auto-threshold 1 -multiscale -multiscale-scale-bias 0.75 -multiscale-scales 0,1,2,6 -wgridder-accuracy 0.001 -no-min-grid-resolution -primary-beam-limit 0.5\
+                -reorder -parallel-reordering 4 -squared-channel-joining -join-polarizations -fit-spectral-pol 4 -circular-beam -beam-size 13asec \
+                -auto-mask 3 -auto-threshold 1.5 -multiscale -multiscale-scale-bias 0.75 -multiscale-scales 0,1,2,4\
                 -parallel-deconvolution 512 -parallel-gridding 4 -nwlayers-factor 3 -minuvw-m 40 -no-mf-weighting -weighting-rank-filter 3 \
-                -taper-gaussian 6 -data-column CORRECTED_DATA {target_ms}"
+                -taper-gaussian 10 -data-column CORRECTED_DATA {target_ms}"
 
             stdout, stderr = utils.run_command(cmd, logger)
             logger.info(stdout)
@@ -125,7 +128,7 @@ def run(logger, obs_id, targets, path):
             logger.info('IMAGE POL TARGET: matching image shapes...')
 
             im_name = f'{path}/TARGET_IMAGES/{obs_id}_{target}_pol'
-            image_list = glob.glob(f'{im_name}*image-pb-cut.fits')
+            image_list = glob.glob(f'{im_name}*image-cut.fits')
 
             max_shape = [0, 0]
             valid_images = []
@@ -144,24 +147,53 @@ def run(logger, obs_id, targets, path):
                 continue
             
             logger.info(f"Maximum shape determined: {max_shape}")
-
+                 
             for image in valid_images:
+                #pad images to max shape
                 with fits.open(image, mode='update') as hdu:
                     data = hdu[0].data
                     header = hdu[0].header
 
+                    y_offset = (max_shape[0] - data.shape[0]) // 2
+                    x_offset = (max_shape[1] - data.shape[1]) // 2
+
                     padded = np.full(max_shape, np.nan)
-                    padded[:data.shape[0], :data.shape[1]] = data
+                    padded[y_offset:y_offset + data.shape[0], x_offset:x_offset + data.shape[1]] = data
 
                     if 'CRPIX1' in header and 'CRPIX2' in header:
-                        header['CRPIX1'] += (max_shape[1] - data.shape[1]) // 2
-                        header['CRPIX2'] += (max_shape[0] - data.shape[0]) // 2
+                        header['CRPIX1'] += x_offset
+                        header['CRPIX2'] += y_offset
                     header['NAXIS1'] = max_shape[1]
                     header['NAXIS2'] = max_shape[0]
 
                     hdu[0].data = padded
                     hdu.flush()
                     logger.info(f"Padded {image} to shape {max_shape}")
+
+                #cut beam files to same size as images
+                beam_file = image.replace('-image-cut.fits', '-image_beam.fits')
+                if not os.path.isfile(beam_file):
+                    logger.warning(f"Beam file {beam_file} not found.")
+                    continue
+                with fits.open(beam_file) as hdu:
+                    beam_data = hdu[0].data
+                    beam_hdr = hdu[0].header
+                    beam_wcs = WCS(beam_hdr)
+                    wcs_new = beam_wcs.sub(['longitude', 'latitude'])
+                    if beam_data.shape == tuple(max_shape):
+                        logger.info(f"Beam {beam_file} already has correct shape {max_shape}.")
+                        continue
+
+                    beam_center = (beam_data.shape[1] // 2, beam_data.shape[0] // 2)
+                    beam_cut = Cutout2D(beam_data, position=beam_center, size=max_shape, wcs=wcs_new)
+                    new_hdr = beam_hdr.copy()
+                    new_hdr.update(beam_cut.wcs.to_header())
+                    new_hdr['NAXIS1'] = beam_cut.data.shape[1]
+                    new_hdr['NAXIS2'] = beam_cut.data.shape[0]
+                    output = beam_file.replace('beam.fits', 'beam-cut.fits')
+                    fits.writeto(output, beam_cut.data, new_hdr, overwrite=True)
+                    logger.info(f"Cut beam {beam_file} to shape {max_shape} and saved to {output}")
+
 
             logger.info('IMAGE POL TARGET: finished matching image shapes')
             logger.info("")

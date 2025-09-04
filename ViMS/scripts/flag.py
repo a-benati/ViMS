@@ -273,6 +273,40 @@ def flag_bad_antennas(logger, ms, ant):
     except Exception as e:
         logger.exception("Error while flagging bad antenna")
 
+def flag_bad_scan(logger, ms, scan):
+    """
+    Function to flag bad scans.
+    
+    Parameters:
+        logger: logger instance of the pipeline
+        ms: measurement set file to be flagged
+    """
+    try:
+        logger.info("\n\n\n\n\n")
+        logger.info("FLAG: Flagging bad scans...")
+        flagdata(vis=ms,\
+                    mode="manual",autocorr=False,inpfile="",reason="any",tbuff=0.0,\
+                    spw="",\
+                    field="",antenna="",uvrange="",timerange="",\
+                    correlation="",scan=scan,intent="",array="",observation="",feed="",clipminmax=[],\
+                    datacolumn="DATA",clipoutside=True,channelavg=False,chanbin=1,timeavg=False,timebin="0s",\
+                    clipzeros=False,quackinterval=0.0,quackmode="beg",quackincrement=False,tolerance=0.0,\
+                    addantenna="",lowerlimit=0.0,upperlimit=90.0,ntime="scan",combinescans=False,timecutoff=4.0,\
+                    freqcutoff=3.0,timefit="line",freqfit="poly",maxnpieces=7,flagdimension="freqtime",\
+                    usewindowstats="none",halfwin=1,extendflags=True,winsize=3,timedev="",freqdev="",timedevscale=5.0,\
+                    freqdevscale=5.0,spectralmax=1000000.0,spectralmin=0.0,antint_ref_antenna="",minchanfrac=0.6,\
+                    verbose=False,extendpols=True,growtime=50.0,growfreq=50.0,growaround=False,flagneartime=False,\
+                    flagnearfreq=False,minrel=0.0,maxrel=1.0,minabs=0,maxabs=-1,spwchan=False,spwcorr=False,\
+                    basecnt=False,fieldcnt=False,name="Summary",action="apply",display="",flagbackup=False,\
+                    savepars=False,cmdreason="",outfile="",overwrite=True,writeflags=True)
+        log.redirect_casa_log(logger)
+        logger.info("FLAG: Flagged bad scans\n\n\n\n\n")
+        logger.info("")
+        logger.info("")
+        logger.info("")
+    except Exception as e:
+        logger.exception("Error while flagging bad scans")
+
 
 def flag_rfi_mask(logger, ms): # NB NOT IMPLEMENTED!
     """
@@ -441,6 +475,8 @@ def run(logger, obs_id, ms, path, toflag='cal'):
     else:
         ant = 'm041'
     flag_bad_antennas(logger, ms, ant)
+
+    flag_bad_scan(logger, ms, '11') # Example: flagging scan 11, modify as needed
 
     if toflag == 'cal':
         if obs_id =='obs01' or obs_id == 'obs02' or obs_id == 'uhf1':

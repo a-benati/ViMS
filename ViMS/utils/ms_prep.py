@@ -56,7 +56,7 @@ def get_ms(logger, obs_id, delete_zipped=False):
     zipped_folder = '/lofar/bba5268/meerkat_virgo/raw_ms_files'
 
     for folder in search_folders:
-        ms_file = glob.glob(f'{folder}/{obs_id}*.ms')
+        ms_file = glob.glob(f'{folder}/{obs_id}*l0.ms')
         if ms_file:
             logger.info(f'Found full ms files for obs_id {obs_id}: {ms_file}')
             return ms_file[0]
@@ -194,7 +194,7 @@ def split_cal(logger, full_ms, path):
         logger.info(f'Size of the calibrator file:{cal_size} MB. Space left in target path {path}/MS_FILES/; {space_left[2]}/{space_left[0]} GB ({space_left[2]/space_left[0] *100} %)')
         
         if os.path.exists(f"{path}/LOGS/feedswap_cal.txt"):
-            os.remove("feedswap_cal.txt")
+            os.remove(f"{path}/LOGS/feedswap_cal.txt")
         else:
             logger.info("The feedswap file does not exist") 
 
